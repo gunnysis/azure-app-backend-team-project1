@@ -1,10 +1,24 @@
 # azure-app-backend-team-project1
 
-Azure ML 엔드포인트 연동용 FastAPI 백엔드 (BFF + ML 프록시).
+Azure ML 엔드포인트 연동용 **FastAPI 백엔드** (BFF + 내부 라우팅 게이트웨이).
+클라이언트 ↔ (본 백엔드) ↔ Azure ML Managed Online Endpoint 사이에서 인증·검증·에러표준화·요청추적을 담당합니다.
 
 - **런타임**: Python 3.14 / FastAPI
 - **배포**: Azure App Service (Linux, **Code 배포** — Docker 아님)
-- **설계 문서**: [`docs/design_backend.md`](docs/design_backend.md)
+- **상태**: ML 추상화 + Mock으로 전 구간 동작·테스트 완료. 실제 ML 연동·배포는 승인 대기.
+
+> ⚠️ Azure 리소스 생성/변경·실제 배포·과금 작업은 **승인 후** 진행합니다([CLAUDE.md](CLAUDE.md) 참조).
+
+## 문서 맵
+
+| 문서 | 내용 |
+|---|---|
+| [docs/PRD.md](docs/PRD.md) | 제품 요구사항 — 왜/무엇을 |
+| [docs/SPEC.md](docs/SPEC.md) | API·인터페이스 명세 — 외부 계약 |
+| [docs/TRD.md](docs/TRD.md) | 기술 구현 — 스택·구조·결정 근거 |
+| [docs/design_backend.md](docs/design_backend.md) | 아키텍처 상세·팩트체크 출처 |
+| [CHANGELOG.md](CHANGELOG.md) | 버전별 변경 이력 |
+| [CLAUDE.md](CLAUDE.md) | 작업 원칙·자율/승인 경계 |
 
 ## 구조
 
@@ -21,8 +35,8 @@ app/
 └── core/              # errors / middleware / exception_handlers / ratelimit
 ```
 
-ML 호출은 `MLClient` 인터페이스 뒤로 격리됨. `ML_CLIENT=mock|azure`로 구현체 전환.
-실제 엔드포인트 정보가 확정되면 `app/ml/azure.py`의 변환 함수 2개와 `.env`만 채우면 됨.
+ML 호출은 `MLClient` 인터페이스 뒤로 격리됩니다. `ML_CLIENT=mock|azure`로 구현체를 전환하며,
+실제 엔드포인트 정보가 확정되면 `app/ml/azure.py`의 변환 함수 2개(`_to_aml_payload`/`_from_aml_response`)와 `.env`만 채우면 됩니다.
 
 ## 로컬 실행
 
@@ -43,13 +57,27 @@ curl -X POST http://127.0.0.1:8000/api/v1/predict \
   -d '{"inputs":[1,2,3]}'
 ```
 
+전체 엔드포인트·에러 코드는 [SPEC.md](docs/SPEC.md) 참조.
+
+## 주요 환경변수
+
+| 키 | 기본값 | 설명 |
+|---|---|---|
+| `API_KEY` | `dev-local-key` | `X-API-Key` 기대값 |
+| `ML_CLIENT` | `mock` | `mock` \| `azure` |
+| `AZURE_ML_SCORING_URI` / `AZURE_ML_KEY` | (없음) | 실제 연동 시 |
+| `CORS_ORIGINS` | `""` | 콤마 구분 허용 출처 |
+| `RATE_LIMIT` | `60/minute` | IP 기준 근사 제한 |
+
+전체 목록은 [.env.example](.env.example) / [TRD.md §7](docs/TRD.md) 참조.
+
 ## 테스트
 
 ```bash
-pytest
+pytest          # 11건 (health / auth / predict / validation)
 ```
 
-## 배포 (App Service, Code)
+## 배포 (App Service, Code) — ⚠️ 승인 필요
 
 startup 명령은 [`startup.sh`](startup.sh):
 
@@ -57,5 +85,6 @@ startup 명령은 [`startup.sh`](startup.sh):
 gunicorn -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --timeout 600 app.main:app
 ```
 
-시크릿은 커밋하지 않고 App Service **Application Settings**로 주입
+시크릿은 커밋하지 않고 App Service **Application Settings**로 주입합니다
 (`API_KEY`, `AZURE_ML_SCORING_URI`, `AZURE_ML_KEY`, `CORS_ORIGINS`, `ML_CLIENT`).
+배포 대상·절차 상세는 [TRD.md §9](docs/TRD.md).
