@@ -1,0 +1,33 @@
+# --- Secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+
+# --- Build / deploy artifacts ---
+deploy.zip
+*.zip
+build/
+dist/
+*.egg-info/
+
+# --- Test / coverage ---
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
