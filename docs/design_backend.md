@@ -146,7 +146,8 @@ class MLClient(ABC):
 
 ### 4.3 실제 구현 (`app/ml/azure.py`) — 골격만, 나중에 활성화
 - `httpx.AsyncClient`로 `POST {AZURE_ML_SCORING_URI}`.
-- 헤더: `Authorization: Bearer {AZURE_ML_KEY}`, `Content-Type: application/json` (공식 규약 확인됨).
+- 헤더: `Authorization: Bearer {key}`, `Content-Type: application/json` (공식 규약 확인됨).
+  - 키는 **엔드포인트 단위 primary/secondary**(`AZURE_ML_AUTH_PRI_KEY`/`AZURE_ML_AUTH_SEC_KEY`, 워크스페이스 단일 키 아님). 호출엔 primary 우선·secondary 폴백.
   - authMode=key가 기본. AMLToken/AADToken은 향후 확장 지점으로만 표시(키는 만료 없음, 토큰은 만료 → 갱신 로직 필요).
 - 타임아웃·재시도(지수 백오프, 최대 2회, 멱등 가정)·상태코드 매핑(5xx/타임아웃 → 502, 4xx → 그대로 전달).
 - httpx 클라이언트 타임아웃은 gunicorn `--timeout`(기본 600s)보다 **작게** 설정(예: connect 5s / read 30s)해 워커 행 방지.
@@ -273,7 +274,7 @@ class PredictResponse(BaseModel):
   - 워커 수 2는 P0v3(1 vCPU급) 기준 보수값. 부하 측정 후 조정.
   - 참고: 최신 App Service는 FastAPI 자동 감지로 startup 생략이 가능하나, **명시적 startup.sh를 두어 재현성·이식성 확보**(권장).
 - **시크릿 주입**: `.env` 값들을 App Service **Application Settings**로 등록(키는 커밋 금지).
-  - `API_KEY`, `AZURE_ML_SCORING_URI`, `AZURE_ML_KEY`, `CORS_ORIGINS`, `ML_CLIENT`
+  - `API_KEY`, `AZURE_ML_SCORING_URI`, `AZURE_ML_AUTH_PRI_KEY`, `AZURE_ML_AUTH_SEC_KEY`, `CORS_ORIGINS`, `ML_CLIENT`
 - **헬스체크**: App Service Health check 경로를 `/health`로 지정(인증·RateLimit 제외이므로 플랫폼 프로브 통과).
 - 배포 명령·계획은 **별도 보고 후 대기** (이 문서 범위는 "사전 설계"까지).
 

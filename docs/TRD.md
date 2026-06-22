@@ -113,7 +113,7 @@ class MLClient(ABC):
 | `API_KEY` | `dev-local-key` | X-API-Key 기대값 |
 | `ML_CLIENT` | `mock` | `mock`\|`azure` |
 | `AZURE_ML_SCORING_URI` | (없음) | 실제 연동 시 |
-| `AZURE_ML_KEY` | (없음) | 실제 연동 시(시크릿) |
+| `AZURE_ML_AUTH_PRI_KEY` / `AZURE_ML_AUTH_SEC_KEY` | (없음) | 엔드포인트 primary/secondary 키(시크릿). primary 우선·secondary 폴백 |
 | `ML_TIMEOUT_CONNECT` / `ML_TIMEOUT_READ` | 5.0 / 30.0 | httpx 타임아웃(초) |
 | `ML_MAX_RETRIES` | 2 | 재시도 횟수 |
 | `CORS_ORIGINS` | `""` | 콤마 구분 허용 출처 |
