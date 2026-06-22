@@ -1,20 +1,23 @@
 """예측 요청/응답 스키마 (Pydantic v2).
 
-실제 ML 엔드포인트의 입출력 형태가 확정되면 이 파일과
-app/ml/azure.py 의 변환 함수만 수정하면 된다 (라우터·서비스 불변).
+입력 계약은 test4 엔드포인트 swagger 로 검증됨 (Designer 실시간 웹서비스):
+요청 본문은 행(레코드)들의 배열이며, AzureMLClient 가 이를
+`{"Inputs": {"input1": [...]}, "GlobalParameters": {}}` 로 감싼다.
+모델이 교체될 수 있어(테스트용) 피처를 코드에 못박지 않고 제네릭 dict 로 둔다(§0.1).
+스키마가 바뀌어도 이 파일과 app/ml/azure.py 변환 함수만 수정하면 된다(라우터·서비스 불변).
 """
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PredictRequest(BaseModel):
-    # 알 수 없는 필드는 거부 → 오타·오용을 조기에 422로 차단.
+    # 알 수 없는 최상위 필드는 거부 → 오타·오용을 조기에 422로 차단.
     model_config = ConfigDict(extra="forbid")
 
-    # 실제 스키마 확정 시 구체화. 현재는 추상 인터페이스 형태.
-    inputs: list[float] | dict[str, Any]
+    # 행 배열(각 행 = 피처명→값). 빈 배열은 무의미하므로 1건 이상 요구.
+    inputs: list[dict[str, Any]] = Field(min_length=1)
 
 
 class PredictResponse(BaseModel):

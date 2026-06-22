@@ -28,7 +28,10 @@ class Settings(BaseSettings):
     # --- ML client 선택 및 Azure ML 연동 ---
     ml_client: str = Field(default="mock", pattern="^(mock|azure)$")
     azure_ml_scoring_uri: str | None = None
-    azure_ml_key: str | None = None
+    # 엔드포인트 단위 인증 키(워크스페이스 단일 키는 존재하지 않음).
+    # primary/secondary 2개가 발급되며, 호출엔 primary 우선·secondary 폴백(회전 대비).
+    azure_ml_auth_pri_key: str | None = None
+    azure_ml_auth_sec_key: str | None = None
     ml_timeout_connect: float = 5.0
     ml_timeout_read: float = 30.0
     ml_max_retries: int = 2
@@ -43,6 +46,11 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def azure_ml_key(self) -> str | None:
+        """Bearer 에 사용할 활성 엔드포인트 키 — primary 우선, 없으면 secondary."""
+        return self.azure_ml_auth_pri_key or self.azure_ml_auth_sec_key
 
 
 @lru_cache

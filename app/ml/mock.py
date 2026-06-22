@@ -14,13 +14,16 @@ from app.schemas.prediction import PredictRequest, PredictResponse
 class MockMLClient(MLClient):
     async def predict(self, request: PredictRequest) -> PredictResponse:
         start = time.perf_counter()
-        # 입력을 정규화해 해시 → 0..1 점수. 같은 입력엔 항상 같은 결과.
-        raw = repr(request.inputs).encode("utf-8")
-        digest = hashlib.sha256(raw).hexdigest()
-        score = int(digest[:8], 16) / 0xFFFFFFFF
+        # 실제 엔드포인트처럼 입력 행마다 점수 1개를 반환한다.
+        # 행을 키 정렬로 정규화해 해시 → 0..1 점수. 같은 입력엔 항상 같은 결과.
+        predictions = []
+        for row in request.inputs:
+            raw = repr(sorted(row.items())).encode("utf-8")
+            digest = hashlib.sha256(raw).hexdigest()
+            predictions.append(round(int(digest[:8], 16) / 0xFFFFFFFF, 6))
         elapsed = (time.perf_counter() - start) * 1000
         return PredictResponse(
-            predictions=[round(score, 6)],
+            predictions=predictions,
             model_version="mock-1.0",
             elapsed_ms=round(elapsed, 3),
         )

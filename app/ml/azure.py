@@ -1,10 +1,15 @@
-"""AzureMLClient — Azure ML Managed Online Endpoint 호출 (골격).
+"""AzureMLClient — Azure ML Designer 실시간 엔드포인트(ACI, classic) 호출.
 
-공식 호출 규약: POST {scoring_uri}, Authorization: Bearer {key}, Content-Type: application/json.
-실제 엔드포인트 정보(URI/key)와 입출력 스키마가 확정되면:
-  - .env 의 AZURE_ML_SCORING_URI / AZURE_ML_KEY 설정
-  - _to_aml_payload / _from_aml_response 두 함수만 수정
-하면 나머지 계층은 변경 없이 동작한다.
+호출 규약(test4 swagger 로 검증): POST {scoring_uri},
+Authorization: Bearer {key}, Content-Type: application/json.
+입출력은 Designer 웹서비스 형식:
+  요청  {"Inputs": {"input1": [ {피처...} ]}, "GlobalParameters": {}}
+  응답  {"Results": {"WebServiceOutput0": [ {피처..., "Scored Labels": ...} ]}}
+스키마가 바뀌면 _to_aml_payload / _from_aml_response 두 함수만 수정하면 된다.
+
+인증 키는 엔드포인트 단위 primary/secondary 키다(워크스페이스 단일 키 아님).
+참고: ACI 엔드포인트는 http(평문)라 Bearer 키가 평문 전송된다 — HTTPS 전환은 내부 사정으로
+현재 범위 제외(테스트용 수용). 키 노출 최소화(로그·커밋 금지)로 보완.
 """
 
 import asyncio
@@ -23,7 +28,8 @@ class AzureMLClient(MLClient):
     def __init__(self, settings: Settings) -> None:
         if not settings.azure_ml_scoring_uri or not settings.azure_ml_key:
             raise ValueError(
-                "ML_CLIENT=azure 인데 AZURE_ML_SCORING_URI 또는 AZURE_ML_KEY 가 비어 있습니다."
+                "ML_CLIENT=azure 인데 AZURE_ML_SCORING_URI 또는 "
+                "AZURE_ML_AUTH_PRI_KEY/SEC_KEY 가 비어 있습니다."
             )
         self._uri = settings.azure_ml_scoring_uri
         self._max_retries = settings.ml_max_retries
@@ -41,16 +47,33 @@ class AzureMLClient(MLClient):
             },
         )
 
-    # --- 스키마 변환 격리 지점 (실제 엔드포인트 확정 시 여기만 수정) ---
+    # --- 스키마 변환 격리 지점 (스키마 변경 시 여기만 수정) ---
     @staticmethod
     def _to_aml_payload(request: PredictRequest) -> dict[str, Any]:
-        return {"input_data": request.inputs}
+        # 검증된 계약(test4 swagger): Designer 실시간 웹서비스 형식.
+        # 입력 포트명은 classic Designer 기본값 'input1'.
+        return {"Inputs": {"input1": request.inputs}, "GlobalParameters": {}}
 
     @staticmethod
     def _from_aml_response(data: Any) -> list[Any]:
-        if isinstance(data, dict) and "predictions" in data:
-            return data["predictions"]
-        return data if isinstance(data, list) else [data]
+        # 응답: {"Results": {"WebServiceOutput0": [ {..., "Scored Labels": ...} ]}}
+        # ① 출력 포트명에 의존하지 않고 행 배열을 찾는다(모델 교체 내성).
+        # ② 각 행에서 예측값('Scored Labels')만 추출 → Mock 과 동일한 list[점수] 형태로 통일.
+        #    'Scored Labels' 가 없으면(모델/스키마 교체 등) 행 전체를 보존한다.
+        if isinstance(data, dict) and isinstance(data.get("Results"), dict):
+            rows = next(
+                (v for v in data["Results"].values() if isinstance(v, list)), [data]
+            )
+        elif isinstance(data, list):
+            rows = data
+        else:
+            rows = [data]
+        return [
+            row["Scored Labels"]
+            if isinstance(row, dict) and "Scored Labels" in row
+            else row
+            for row in rows
+        ]
 
     async def predict(self, request: PredictRequest) -> PredictResponse:
         payload = self._to_aml_payload(request)
@@ -92,8 +115,9 @@ class AzureMLClient(MLClient):
         ) from last_exc
 
     async def health(self) -> bool:
-        # 관리형 엔드포인트는 표준 health 경로가 없어, 도달성만 보수적으로 보고한다.
-        # (실제 운영에선 가벼운 ping 페이로드로 교체 가능)
+        # 엔드포인트는 GET / → "Healthy"(Bearer 필요) 헬스 경로를 제공하나,
+        # /health 마다 업스트림을 ping 하면 부하·과금이 늘어 보수적으로 도달성만 보고한다.
+        # (필요 시 base_url + "/" 로 가벼운 GET ping 으로 교체 가능)
         return True
 
     async def aclose(self) -> None:
