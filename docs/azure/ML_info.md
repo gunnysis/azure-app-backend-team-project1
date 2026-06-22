@@ -114,4 +114,25 @@
 - [x] **인증 키 확보** → Consume 탭 기반으로 `.env` 에 `AZURE_ML_AUTH_PRI_KEY`/`AZURE_ML_AUTH_SEC_KEY` 저장(미커밋). (워크스페이스 단일 키는 없음 — 엔드포인트 단위 primary/secondary 키.)
 - [x] `app/ml/comsume.py` 스모크 + `AzureMLClient` E2E 라이브 검증 성공
 - [x] **운영 배포**: App Service에 키/URI·`ML_CLIENT=azure` App Settings 주입 + `deploy.sh`(OneDeploy) → `/health`·`/api/v1/predict` 200
-- [ ] (운영 고도화) Application Insights 활성, CPU/Memory 사양 재검토 (※ HTTPS 전환은 내부 사정으로 현재 범위 제외)
+- [x] **Application Insights 활성** + 알림/가용성 테스트 구성(§6)
+- [ ] (운영 고도화) CPU/Memory 사양 재검토 (※ HTTPS 전환은 내부 사정으로 현재 범위 제외)
+
+---
+
+## 6. 모니터링 / 알림 (App Insights)
+
+백엔드는 **Azure Monitor OpenTelemetry**로 계측되어 기존 App Insights `team3ml0984223413`(워크스페이스 기반)로 텔레메트리를 보낸다. requests / dependencies(httpx→ML ACI) / traces 수집 확인됨.
+
+**가용성 테스트** (`webtest-mlbackend-health`, standard, 5분 주기, 3개 리전: 일본동부·동남아·동아시아)
+- `GET /health` → 200 기대. 실패 시 아래 알림.
+
+**알림 규칙** → 액션 그룹 `ag-mlbackend-alerts`(이메일: 등록 주소)
+| 규칙 | 조건 | 심각도 |
+|---|---|---|
+| `alert-availability-low` | 가용성 < 90% (5분) | Sev1 |
+| `alert-ml-dependency-failures` | ML 의존성 실패 count > 4 (5분) | Sev2 |
+| `alert-server-exceptions` | 서버 예외 count > 0 (5분) | Sev2 |
+
+> 알림 수신: 액션 그룹 이메일로 발송(최초 1회 Azure 구독 확인 메일 옵트인 필요).
+> 포털: App Insights → Application Map / Failures / Availability 로 확인.
+> 가용성 리전 추가는 포털에서 1클릭(현재 CLI 제약으로 3개 설정).
