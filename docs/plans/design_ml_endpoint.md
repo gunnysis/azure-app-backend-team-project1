@@ -364,9 +364,9 @@ def _from_aml_response(data: Any) -> list[Any]:
 
 ## 10. 검증 기준
 - (완료) 엔드포인트 `Healthy` + REST/Swagger URI 존재 + swagger 계약 실측(§2).
-- (완료) §8 백엔드 수정 후 **pytest green**(13 passed).
-- (남음) 스모크: `python -m app.ml.comsume`(`.env` 의 PRI/SEC 키 자동 로드) → 응답 `{"Results":{"WebServiceOutput0":[…,"Scored Labels"]}}`.
-- (남음) 백엔드 `ML_CLIENT=azure`로 `/api/v1/predict` E2E(실연동 **승인 후**).
+- (완료) §8 백엔드 수정 후 **pytest green**(22 passed).
+- (완료) 스모크: `python -m app.ml.comsume` → `{"Results":{"WebServiceOutput0":[…,"Scored Labels"]}}` 정상.
+- (완료) **운영 배포**: App Service `ML_CLIENT=azure` → `/health` 200, `/api/v1/predict` 200(`predictions:[87.55…]`), 무키 401. 배포는 `deploy.sh`(OneDeploy).
 
 ---
 

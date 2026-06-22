@@ -39,7 +39,7 @@ pytest tests/test_predict.py::test_predict_ok -v   # 단일 테스트
 - `pytest.ini`: `asyncio_mode=auto` → `async def test_*` 에 데코레이터 불필요.
 - 런타임 의존성은 `requirements.txt`에 전이 의존성까지 전부 핀 고정. 개발 전용은 `requirements-dev.txt`.
 
-## 아키텍처 (상세: docs/design_backend.md, docs/TRD.md)
+## 아키텍처 (상세: docs/achieve/design_backend.md, docs/TRD.md)
 
 **요청 흐름**: 라우터(`app/api/v1`) → 의존성 주입(`app/api/deps.py`) → 서비스/BFF(`app/services`) → `MLClient` 추상화(`app/ml`) → Azure ML.
 

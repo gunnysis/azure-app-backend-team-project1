@@ -1,6 +1,6 @@
 # TRD — 기술 요구사항 / 구현 문서 (Technical Requirements Document)
 
-> 문서 성격: **어떻게 구현했는가**(스택·구조·결정 근거). 외부 계약은 [SPEC](SPEC.md), 요구 배경은 [PRD](PRD.md), 아키텍처 다이어그램·팩트체크 출처는 [design_backend.md](design_backend.md).
+> 문서 성격: **어떻게 구현했는가**(스택·구조·결정 근거). 외부 계약은 [SPEC](SPEC.md), 요구 배경은 [PRD](PRD.md), 아키텍처 다이어그램·팩트체크 출처는 [design_backend.md](achieve/design_backend.md).
 > 버전: 0.1.0 · 최종 수정: 2026-06-21
 
 ---

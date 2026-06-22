@@ -1,6 +1,6 @@
 # PRD — ML 연동 백엔드 (Product Requirements Document)
 
-> 문서 성격: **제품 요구사항**(왜/무엇을). 기술 구현(어떻게)은 [TRD](TRD.md), 인터페이스 명세는 [SPEC](SPEC.md), 아키텍처 상세는 [design_backend.md](design_backend.md) 참조.
+> 문서 성격: **제품 요구사항**(왜/무엇을). 기술 구현(어떻게)은 [TRD](TRD.md), 인터페이스 명세는 [SPEC](SPEC.md), 아키텍처 상세는 [design_backend.md](achieve/design_backend.md) 참조.
 > 버전: 0.1.0 · 최종 수정: 2026-06-21 · 상태: 초기 베이스라인
 
 ---

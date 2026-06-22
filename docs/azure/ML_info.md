@@ -2,7 +2,7 @@
 
 > **수집일:** 2026-06-22 (Azure 포털 기준, `test4` 엔드포인트로 갱신)
 > **상태:** ⚠️ **테스트용 엔드포인트**(실제 모델/스키마 확정 전). 단, 배포는 **완료(Healthy)** — REST endpoint·Swagger URI 생성됨(아래 §1 참조).
-> **연계 문서:** [`../design_backend.md`](../design_backend.md) §4 (ML 추상화), §10 (배포)
+> **연계 문서:** [`../achieve/design_backend.md`](../achieve/design_backend.md) §4 (ML 추상화), §10 (배포)
 
 ---
 
@@ -110,6 +110,6 @@
 - [x] **Swagger URI**로 실제 입출력 스키마 확보(§3.1)
 - [x] 실계약으로 `azure.py` 변환 2함수·`prediction.py`·`mock.py`·테스트 수정 (pytest green)
 - [x] **인증 키 확보** → Consume 탭 기반으로 `.env` 에 `AZURE_ML_AUTH_PRI_KEY`/`AZURE_ML_AUTH_SEC_KEY` 저장(미커밋). (워크스페이스 단일 키는 없음 — 엔드포인트 단위 primary/secondary 키.)
-- [ ] `app/ml/comsume.py` 로 1건 스모크(`python -m app.ml.comsume`, `.env` 자동 로드) -> 직접 작업/디버깅/재발방지 작업 병행
-- [ ] `ML_CLIENT=azure`로 전환 후 `/api/v1/predict` E2E (실연동은 **승인 후** 진행)
-- [ ] (운영 전환 시) **HTTPS 경로 이전**, Application Insights 활성, CPU/Memory 사양 재검토
+- [x] `app/ml/comsume.py` 스모크 + `AzureMLClient` E2E 라이브 검증 성공
+- [x] **운영 배포**: App Service에 키/URI·`ML_CLIENT=azure` App Settings 주입 + `deploy.sh`(OneDeploy) → `/health`·`/api/v1/predict` 200
+- [ ] (운영 고도화) Application Insights 활성, CPU/Memory 사양 재검토 (※ HTTPS 전환은 내부 사정으로 현재 범위 제외)

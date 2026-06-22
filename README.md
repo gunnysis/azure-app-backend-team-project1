@@ -5,7 +5,7 @@ Azure ML 엔드포인트 연동용 **FastAPI 백엔드** (BFF + 내부 라우팅
 
 - **런타임**: Python 3.14 / FastAPI
 - **배포**: Azure App Service (Linux, **Code 배포** — Docker 아님)
-- **상태**: ML 추상화 + Mock으로 전 구간 동작·테스트 완료. 실제 ML 연동·배포는 승인 대기.
+- **상태**: **운영 배포 완료** — App Service에서 `ML_CLIENT=azure`로 실 ML 엔드포인트 E2E 동작(`/health`·`/api/v1/predict` 200). 22 tests green.
 
 > ⚠️ Azure 리소스 생성/변경·실제 배포·과금 작업은 **승인 후** 진행합니다([CLAUDE.md](CLAUDE.md) 참조).
 
@@ -16,7 +16,7 @@ Azure ML 엔드포인트 연동용 **FastAPI 백엔드** (BFF + 내부 라우팅
 | [docs/PRD.md](docs/PRD.md) | 제품 요구사항 — 왜/무엇을 |
 | [docs/SPEC.md](docs/SPEC.md) | API·인터페이스 명세 — 외부 계약 |
 | [docs/TRD.md](docs/TRD.md) | 기술 구현 — 스택·구조·결정 근거 |
-| [docs/design_backend.md](docs/design_backend.md) | 아키텍처 상세·팩트체크 출처 |
+| [docs/achieve/design_backend.md](docs/achieve/design_backend.md) | 아키텍처 상세·팩트체크 출처 (아카이브) |
 | [CHANGELOG.md](CHANGELOG.md) | 버전별 변경 이력 |
 | [CLAUDE.md](CLAUDE.md) | 작업 원칙·자율/승인 경계 |
 
@@ -77,14 +77,14 @@ curl -X POST http://127.0.0.1:8000/api/v1/predict \
 pytest          # 11건 (health / auth / predict / validation)
 ```
 
-## 배포 (App Service, Code) — ⚠️ 승인 필요
+## 배포 (App Service, Code) — ✅ 배포 완료 (재배포는 승인)
 
-startup 명령은 [`startup.sh`](startup.sh):
+배포는 멱등 스크립트 [`deploy.sh`](deploy.sh)로 수행합니다(App Settings 주입 → startup/헬스체크 설정 → zip OneDeploy → 스모크; transient 502 내성). 시작 명령은 [`startup.sh`](startup.sh):
 
 ```bash
-gunicorn -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --timeout 600 app.main:app
+gunicorn -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${PORT:-8000} --timeout 600 app.main:app
 ```
 
 시크릿은 커밋하지 않고 App Service **Application Settings**로 주입합니다
-(`API_KEY`, `AZURE_ML_SCORING_URI`, `AZURE_ML_KEY`, `CORS_ORIGINS`, `ML_CLIENT`).
+(`API_KEY`, `ML_CLIENT`, `AZURE_ML_SCORING_URI`, `AZURE_ML_AUTH_PRI_KEY`, `AZURE_ML_AUTH_SEC_KEY`, `CORS_ORIGINS`).
 배포 대상·절차 상세는 [TRD.md §9](docs/TRD.md).
