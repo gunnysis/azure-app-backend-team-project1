@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     ml_timeout_read: float = 30.0
     ml_max_retries: int = 2
 
+    # --- Observability (Azure Monitor / Application Insights) ---
+    # 연결문자열이 있으면 텔레메트리 활성, 없으면 런타임 no-op. (시크릿 — App Settings/.env 주입)
+    applicationinsights_connection_string: str | None = None
+
     # --- CORS ---
     cors_origins: str = ""  # 콤마 구분 (예: "https://a.com,https://b.com")
 

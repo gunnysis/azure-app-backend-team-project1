@@ -86,5 +86,5 @@ gunicorn -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${PORT:-8000} --timeou
 ```
 
 시크릿은 커밋하지 않고 App Service **Application Settings**로 주입합니다
-(`API_KEY`, `ML_CLIENT`, `AZURE_ML_SCORING_URI`, `AZURE_ML_AUTH_PRI_KEY`, `AZURE_ML_AUTH_SEC_KEY`, `CORS_ORIGINS`).
+(`API_KEY`, `ML_CLIENT`, `AZURE_ML_SCORING_URI`, `AZURE_ML_AUTH_PRI_KEY`, `AZURE_ML_AUTH_SEC_KEY`, `CORS_ORIGINS`, `APPLICATIONINSIGHTS_CONNECTION_STRING`).
 배포 대상·절차 상세는 [TRD.md §9](docs/TRD.md).

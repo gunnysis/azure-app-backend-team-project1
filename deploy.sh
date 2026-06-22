@@ -13,8 +13,19 @@ APP="${APP:-app-mlbackend-prod-kc-01}"
 cd "$(cd "$(dirname "$0")" && pwd)"
 
 [ -f .env ] || { echo "ERROR: .env 가 없습니다." >&2; exit 1; }
+# 주의: .env 의 값에 세미콜론(;)이 있으면 반드시 따옴표로 감싸야 한다.
+# (예: APPLICATIONINSIGHTS_CONNECTION_STRING="InstrumentationKey=...;IngestionEndpoint=...")
+# 따옴표가 없으면 아래 `source` 가 첫 ';' 에서 값을 잘라 truncated 시크릿이 주입된다.
 set -a; . ./.env; set +a
 : "${API_KEY:?API_KEY 필요}" "${AZURE_ML_SCORING_URI:?}" "${AZURE_ML_AUTH_PRI_KEY:?}"
+
+# 재발방지: 연결문자열이 IngestionEndpoint 없이 truncated 되면(따옴표 누락 등) 텔레메트리가
+# 글로벌 엔드포인트로 가 cross-origin redirect 로 누락된다 → 완전치 않으면 차라리 주입하지 않는다.
+if [ -n "${APPLICATIONINSIGHTS_CONNECTION_STRING:-}" ] && \
+   ! printf '%s' "$APPLICATIONINSIGHTS_CONNECTION_STRING" | grep -q "IngestionEndpoint"; then
+  echo "WARN: APPLICATIONINSIGHTS_CONNECTION_STRING 에 IngestionEndpoint 없음(.env 따옴표 확인) — 주입 생략" >&2
+  APPLICATIONINSIGHTS_CONNECTION_STRING=""
+fi
 
 echo "==> [1/4] Application Settings 주입 (값 미출력)"
 az webapp config appsettings set -g "$RG" -n "$APP" --only-show-errors --output none --settings \
@@ -26,6 +37,7 @@ az webapp config appsettings set -g "$RG" -n "$APP" --only-show-errors --output 
   CORS_ORIGINS="${CORS_ORIGINS:-}" \
   RATE_LIMIT_ENABLED="${RATE_LIMIT_ENABLED:-true}" \
   RATE_LIMIT="${RATE_LIMIT:-60/minute}" \
+  APPLICATIONINSIGHTS_CONNECTION_STRING="${APPLICATIONINSIGHTS_CONNECTION_STRING:-}" \
   SCM_DO_BUILD_DURING_DEPLOYMENT=true
 
 echo "==> [2/4] 시작 명령(startup.sh) + 헬스체크 경로(/health)"

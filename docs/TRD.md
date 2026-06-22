@@ -117,6 +117,7 @@ class MLClient(ABC):
 | `ML_TIMEOUT_CONNECT` / `ML_TIMEOUT_READ` | 5.0 / 30.0 | httpx 타임아웃(초) |
 | `ML_MAX_RETRIES` | 2 | 재시도 횟수 |
 | `CORS_ORIGINS` | `""` | 콤마 구분 허용 출처 |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | (없음) | App Insights 연결문자열(시크릿). 비우면 텔레메트리 no-op |
 | `RATE_LIMIT_ENABLED` / `RATE_LIMIT` | true / `60/minute` | 레이트리밋 |
 
 > 시크릿은 `.env`(로컬, 비커밋) 또는 App Service **Application Settings**(운영)로 주입.

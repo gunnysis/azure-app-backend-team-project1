@@ -19,6 +19,7 @@ from app.core.exception_handlers import build_error_body, register_exception_han
 from app.core.middleware import RequestContextMiddleware
 from app.core.ratelimit import limiter
 from app.ml.factory import create_ml_client
+from app.observability import configure_observability
 
 logger = logging.getLogger("app")
 
@@ -37,7 +38,6 @@ def create_app() -> FastAPI:
         level=settings.log_level,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
-
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         # 워커마다 1회 실행 → 워커별 단일 ML 클라이언트(커넥션 풀 재사용).
@@ -75,6 +75,10 @@ def create_app() -> FastAPI:
         )
     # RequestContext 를 가장 마지막에 추가 → 가장 바깥에서 request_id 발급.
     app.add_middleware(RequestContextMiddleware)
+
+    # App Insights 텔레메트리(연결문자열 있을 때만, 없으면 no-op). 앱·미들웨어 구성 후
+    # 명시적으로 계측한다(FastAPI 요청 + httpx ML 호출 + 로그).
+    configure_observability(app, settings)
 
     return app
 

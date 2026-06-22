@@ -98,9 +98,11 @@
 
 | 설정 키 | 채울 값 (출처) | 현재 |
 |---|---|---|
-| `ML_CLIENT` | `azure` (실연동 시) | `mock` |
+| `ML_CLIENT` | `azure` (실연동 시) | ✅ `azure` (App Settings) |
 | `AZURE_ML_SCORING_URI` | `http://7924e88e-…azurecontainer.io/score` (REST endpoint) | ✅ 확보 |
 | `AZURE_ML_AUTH_PRI_KEY`, `AZURE_ML_AUTH_SEC_KEY` | 엔드포인트 **인증 키** (포털 "Consume" 탭) | (테스트용) ✅(미커밋) |
+| `API_KEY` | 백엔드 X-API-Key 기대값(강한 랜덤) | ✅ 주입(미커밋) |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | 기존 App Insights `team3ml0984223413` 연결문자열(재사용) | ✅ 주입(미커밋) |
 
 ---
 
