@@ -5,7 +5,7 @@
 > 상태 **Healthy**, 호출 가능. 즉 본 문서가 다루는 **"v2 managed 엔드포인트로 강제 이전"
 > 경로는 채택되지 않았다**(공식 지원 경로인 ACI 로 갔다). 따라서 BYOC/py3.8 핀/`inference_config`
 > 등 본 문서의 작업은 **현재 불필요**하다.
-> - 실제 엔드포인트 정보·실측 계약: [`../../azure/ML_info.md`](../../azure/ML_info.md)
+> - 실제 엔드포인트 정보·실측 계약: [`../../azure/info.md`](../../azure/info.md)
 > - 현행 연동 설계: [`design_ml_endpoint.md`](../design_ml_endpoint.md)
 > - 본 문서의 가치: 향후 **HTTPS/EOL 대응으로 v2 이전이 필요해질 때**의 사전 분석으로만 참조
 >   (설계 C = v2 네이티브 재export 가 여전히 EOL-free 정답).

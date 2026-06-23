@@ -5,7 +5,7 @@
 > - 본 문서가 다루던 **"엔드포인트를 새로 생성"하는 과제는 대부분 종료** — §4~7·§9~12(생성 절차/경로 선택/생성 승인)은
 >   **참고·대안(향후 EOL 대응 재생성 시)** 으로 격하. 지금 실행할 필요 없음.
 > - **유효·핵심**: §2(입출력 계약, **swagger 로 실측 정정**)와 §8(백엔드 연동, **실계약으로 구현 완료**).
-> - 실측 엔드포인트 정보·계약 원본: [`../azure/ML_info.md`](../azure/ML_info.md) §1·§3.1.
+> - 실측 엔드포인트 정보·계약 원본: [`../azure/info.md`](../azure/info.md) §1·§5.1.
 > - v2 강제 이전 분석([`rejected/design_ml_endpoint_v2.md`](rejected/design_ml_endpoint_v2.md))은 채택되지 않아 **반려(rejected)**.
 >
 > 작성 근거: `az ml`/`az vm` CLI 실측 + 모델 아티팩트 다운로드 + **배포된 엔드포인트 swagger.json 실측** + 공식 문서 팩트체크(§11).
@@ -90,7 +90,7 @@
 | 리전 | `koreacentral` | 동상 |
 | 모델 | `electricity_model` v1, **type=`custom_model`** | `az ml model show` |
 | 모델 출처/생성 | Designer 학습 잡 `a12c0d7c-…`(ILearnerDotNet), 2026-06-22 생성("백엔드 연결용") | model 메타 |
-| **기존 온라인 엔드포인트(v2)** | 0개 (v2 managed). 단 **classic ACI 웹서비스 `test4` 가 별도 존재**(v1, `az ml online-endpoint list`에 안 잡힘) | `az ml online-endpoint list` / 포털·ML_info.md §1 |
+| **기존 온라인 엔드포인트(v2)** | 0개 (v2 managed). 단 **classic ACI 웹서비스 `test4` 가 별도 존재**(v1, `az ml online-endpoint list`에 안 잡힘) | `az ml online-endpoint list` / 포털·azure/info.md §1 |
 | 리전 VM 쿼터 | **Standard DSv2 Family vCPUs 0/50**, Total Regional 0/200 | `az vm list-usage -l koreacentral` |
 | CLI 환경 | az 2.87.0 + ml ext 2.43.0, 로그인됨 | `az version` |
 | 로컬 Docker | **없음** → `--local` 사전검증은 Docker 설치 후 가능 | `docker --version` |
@@ -157,7 +157,7 @@ electricity_model/trained_model_outputs/
 ## 4. 리소스 설계 (경로 P2 — v2 관리형, 비공식)
 
 > 🗄️ **참고/대안(v5)**: 엔드포인트는 **이미 ACI 로 존재**하므로 §4~7(생성)은 **지금 실행 불필요**. 향후 EOL 대응으로 **CLI/v2 재생성**을 택할 때만 참조.
-> ⚠️ **기존 `test4` 의 URI/키는 §6 방식이 아님**: URI 는 이미 확보([`../azure/ML_info.md`](../azure/ML_info.md) §1), **키는 포털 "Consume" 탭**(또는 v1 `az ml service get-keys`)에서 얻는다. §6 의 `az ml online-endpoint show/get-credentials`(v2 관리형)는 이 classic ACI 엔드포인트엔 적용되지 않는다.
+> ⚠️ **기존 `test4` 의 URI/키는 §6 방식이 아님**: URI 는 이미 확보([`../azure/info.md`](../azure/info.md) §1), **키는 포털 "Consume" 탭**(또는 v1 `az ml service get-keys`)에서 얻는다. §6 의 `az ml online-endpoint show/get-credentials`(v2 관리형)는 이 classic ACI 엔드포인트엔 적용되지 않는다.
 >
 > 이 절과 §5·§6은 **P2 경로**(§9)에 해당. P1(ACI)을 택하면 본 절 대신 Studio 배포 마법사를 따른다.
 
