@@ -1,7 +1,7 @@
 # SPEC — API / 인터페이스 명세
 
 > 문서 성격: **외부에서 본 동작 계약**(엔드포인트·스키마·에러). 요구 배경은 [PRD](PRD.md), 내부 구현은 [TRD](TRD.md) 참조.
-> 버전: 0.1.0 · 최종 수정: 2026-06-21 · Base URL(로컬): `http://127.0.0.1:8000`
+> 버전: 0.2.0 · 최종 수정: 2026-06-22 · Base URL(로컬): `http://127.0.0.1:8000`
 
 ---
 
@@ -61,21 +61,22 @@
 
   | 필드 | 타입 | 필수 | 설명 |
   |---|---|---|---|
-  | `inputs` | `list[float]` 또는 `dict[str, any]` | ✅ | 모델 입력. 실제 스키마 확정 시 구체화 |
+  | `inputs` | `list[dict[str, any]]` (행 배열, 최소 1건) | ✅ | 모델 입력. 각 원소 = 한 레코드(피처명→값). 실제 피처 스키마 확정 시 구체화 |
 
   ```json
-  { "inputs": [1, 2, 3] }
+  { "inputs": [ { "feature_a": 0.5, "feature_b": 12 } ] }
   ```
-  또는
+  여러 행도 가능:
   ```json
-  { "inputs": { "feature_a": 0.5, "feature_b": 12 } }
+  { "inputs": [ { "feature_a": 0.5, "feature_b": 12 }, { "feature_a": 0.1, "feature_b": 7 } ] }
   ```
+  > `AzureMLClient`가 이를 Designer 형식 `{"Inputs":{"input1":[...]},"GlobalParameters":{}}`으로 감싼다.
 
 - **200 응답** (`PredictResponse`):
 
   | 필드 | 타입 | 설명 |
   |---|---|---|
-  | `predictions` | `list[any]` | 모델 예측 결과 |
+  | `predictions` | `list[any]` | 모델 예측 결과(입력 행마다 1개) |
   | `model_version` | `string \| null` | 모델 버전(Mock: `"mock-1.0"`) |
   | `elapsed_ms` | `float` | 서버 측 처리 시간(ms) |
 
@@ -87,7 +88,7 @@
   }
   ```
 
-- **Mock 동작**: `inputs`의 sha256 해시 기반 **결정적** 점수(같은 입력 → 같은 출력). 실제 엔드포인트 없이 재현 가능한 테스트 제공.
+- **Mock 동작**: 입력 행마다 `sha256(sorted(row.items()))` 기반 **결정적** 점수 1개(같은 입력 → 같은 출력). 실제 엔드포인트 없이 재현 가능한 테스트 제공.
 
 ---
 
@@ -131,17 +132,17 @@ curl http://127.0.0.1:8000/health
 curl -X POST http://127.0.0.1:8000/api/v1/predict \
   -H "Content-Type: application/json" \
   -H "X-API-Key: local-dev-key" \
-  -d '{"inputs":[1,2,3]}'
+  -d '{"inputs":[{"feature_a":0.5,"feature_b":12}]}'
 
 # 인증 실패(401)
 curl -X POST http://127.0.0.1:8000/api/v1/predict \
   -H "Content-Type: application/json" \
-  -d '{"inputs":[1,2,3]}'
+  -d '{"inputs":[{"feature_a":0.5,"feature_b":12}]}'
 
 # 검증 실패(422) — 알 수 없는 필드
 curl -X POST http://127.0.0.1:8000/api/v1/predict \
   -H "Content-Type: application/json" -H "X-API-Key: local-dev-key" \
-  -d '{"inputs":[1,2,3],"unknown":1}'
+  -d '{"inputs":[{"feature_a":0.5}],"unknown":1}'
 ```
 
 ---

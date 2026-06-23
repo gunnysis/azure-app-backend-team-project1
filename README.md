@@ -5,7 +5,7 @@ Azure ML 엔드포인트 연동용 **FastAPI 백엔드** (BFF + 내부 라우팅
 
 - **런타임**: Python 3.14 / FastAPI
 - **배포**: Azure App Service (Linux, **Code 배포** — Docker 아님)
-- **상태**: **운영 배포 완료** — App Service에서 `ML_CLIENT=azure`로 실 ML 엔드포인트 E2E 동작(`/health`·`/api/v1/predict` 200). 22 tests green.
+- **상태**: **운영 배포 완료** — App Service에서 `ML_CLIENT=azure`로 실 ML 엔드포인트 E2E 동작(`/health`·`/api/v1/predict` 200). 23 tests green.
 
 > ⚠️ Azure 리소스 생성/변경·실제 배포·과금 작업은 **승인 후** 진행합니다([CLAUDE.md](CLAUDE.md) 참조).
 
@@ -54,7 +54,7 @@ uvicorn app.main:app --reload
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/predict \
   -H "Content-Type: application/json" -H "X-API-Key: local-dev-key" \
-  -d '{"inputs":[1,2,3]}'
+  -d '{"inputs":[{"feature_a":0.5,"feature_b":12}]}'
 ```
 
 전체 엔드포인트·에러 코드는 [SPEC.md](docs/SPEC.md) 참조.
@@ -74,7 +74,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/predict \
 ## 테스트
 
 ```bash
-pytest          # 11건 (health / auth / predict / validation)
+pytest          # 23건 (health / auth / predict / validation / azure client / observability)
 ```
 
 ## 배포 (App Service, Code) — ✅ 배포 완료 (재배포는 승인)

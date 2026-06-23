@@ -1,7 +1,7 @@
 # PRD — ML 연동 백엔드 (Product Requirements Document)
 
 > 문서 성격: **제품 요구사항**(왜/무엇을). 기술 구현(어떻게)은 [TRD](TRD.md), 인터페이스 명세는 [SPEC](SPEC.md), 아키텍처 상세는 [design_backend.md](achieve/design_backend.md) 참조.
-> 버전: 0.1.0 · 최종 수정: 2026-06-21 · 상태: 초기 베이스라인
+> 버전: 0.2.0 · 최종 수정: 2026-06-22 · 상태: 운영 배포 완료(실 ML 연동·관측성 포함)
 
 ---
 
@@ -10,7 +10,7 @@
 Azure ML 엔드포인트를 외부 클라이언트에 안전하게 중계하는 **FastAPI 백엔드(BFF + 내부 라우팅 게이트웨이)**. 소규모 비영리 프로젝트로, 5일 개발 기간 내 운영 가능한 최소 인프라를 목표로 한다.
 
 - **한 줄 정의**: 클라이언트 ↔ (본 백엔드) ↔ Azure ML Managed Online Endpoint 를 잇는 인증·검증·에러표준화 게이트웨이.
-- **현재 단계**: ML 추상화 레이어 + Mock 구현으로 전 구간 동작·테스트 완료. 실제 ML 엔드포인트 연동은 정보 확보 후 진행(승인 필요).
+- **현재 단계**: 운영 배포 완료. App Service에서 `ML_CLIENT=azure`로 실 Azure ML Designer 엔드포인트와 E2E 동작하며, Application Insights 관측성도 연동됨.
 
 ## 2. 배경 / 문제 정의
 
@@ -23,10 +23,10 @@ Azure ML 엔드포인트를 외부 클라이언트에 안전하게 중계하는 
 | # | 목표 | 측정 기준 |
 |---|---|---|
 | G1 | ML 호출을 단일 인터페이스 뒤로 격리 | `MLClient` ABC 1개, 구현체 교체는 `ML_CLIENT` 환경변수만 |
-| G2 | 실제 엔드포인트 없이 전 구간 동작·테스트 | Mock으로 E2E 테스트 통과(현재 11건) |
+| G2 | 실제 엔드포인트 없이 전 구간 동작·테스트 | Mock으로 E2E 테스트 통과(현재 23건) |
 | G3 | 횡단 관심사 표준화 | 인증/CORS/RateLimit/에러포맷/요청추적 일괄 적용 |
-| G4 | Azure App Service(Code) 배포 준비 | startup.sh + 핀 고정 의존성 + App Settings 주입 설계 |
-| G5 | 실제 ML 연동 시 변경 최소화 | `azure.py` 변환 함수 2개 + `.env`만 수정 |
+| G4 | Azure App Service(Code) 배포 | ✅ 완료 — `deploy.sh` 멱등 배포 + App Settings 주입, `/health`·`/api/v1/predict` 200 |
+| G5 | 실제 ML 연동 시 변경 최소화 | ✅ 달성 — `azure.py` 변환 함수 2개 + `.env`만으로 Designer 실연동 |
 
 ## 4. 비목표 (Non-Goals)
 
@@ -78,7 +78,7 @@ Azure ML 엔드포인트를 외부 클라이언트에 안전하게 중계하는 
 - **일정**: 5일, 소규모 비영리 → 오버엔지니어링 지양.
 - **런타임**: Python 3.14, FastAPI, Azure App Service Linux(**Code 배포**, Docker 아님).
 - **플랜**: P0v3(Premium v3), **오토스케일 전제** → stateless 유지(인메모리 상태 의존 금지).
-- **ML 규약**: `POST {scoring_uri}` + `Authorization: Bearer {key}`(authMode=key 기준). 입출력 스키마 미확정.
+- **ML 규약**: `POST {scoring_uri}` + `Authorization: Bearer {key}`(authMode=key, 엔드포인트 primary/secondary 키). 입출력은 Designer 실시간 웹서비스 형식(test4 swagger로 확정) — 실제 피처 스키마는 모델 교체 내성 위해 코드에 못박지 않음.
 
 ## 9. 위험 / 완화
 
@@ -96,11 +96,13 @@ Azure ML 엔드포인트를 외부 클라이언트에 안전하게 중계하는 
 | M1 | 설계 문서 승인 | ✅ |
 | M2 | 추상화+스키마+라우터+미들웨어+에러 | ✅ |
 | M3 | 테스트·로컬 구동 검증 | ✅ |
-| M4 | 실제 ML 연동(`AzureMLClient`) | ⏳ 정보 대기 |
-| M5 | App Service 배포 | ⏳ **승인 필요** |
+| M4 | 실제 ML 연동(`AzureMLClient`) | ✅ Designer 엔드포인트 실연동 |
+| M5 | App Service 배포 | ✅ 운영 배포 완료(`deploy.sh`) |
+| M6 | 관측성(App Insights) 연동 | ✅ 연결문자열 있을 때 활성 |
 
 ## 11. 미해결 질문
 
-- 실제 ML 입력 스키마(필드명·타입)와 출력 형태?
-- authMode가 key인지 AMLToken/AADToken인지?
+- 실제 ML 입력 피처 스키마(필드명·타입) 구체화 시점 — 확정되면 SPEC/스키마 함께 개정.
 - 예상 트래픽/동시성(워커 수·플랜 튜닝 근거)?
+
+> 해소됨: 입출력 형태(Designer 웹서비스 형식)·authMode(key, 엔드포인트 primary/secondary)는 0.2.0에서 확정.

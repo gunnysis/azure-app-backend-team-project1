@@ -1,7 +1,7 @@
 # TRD — 기술 요구사항 / 구현 문서 (Technical Requirements Document)
 
 > 문서 성격: **어떻게 구현했는가**(스택·구조·결정 근거). 외부 계약은 [SPEC](SPEC.md), 요구 배경은 [PRD](PRD.md), 아키텍처 다이어그램·팩트체크 출처는 [design_backend.md](achieve/design_backend.md).
-> 버전: 0.1.0 · 최종 수정: 2026-06-21
+> 버전: 0.2.0 · 최종 수정: 2026-06-22
 
 ---
 
@@ -25,6 +25,7 @@
 app/
 ├── main.py                  # create_app(), lifespan, 미들웨어·라우터·핸들러 등록
 ├── config.py                # Settings(pydantic-settings), get_settings() lru_cache
+├── observability.py         # Azure Monitor(App Insights) 계측 — 연결문자열 있을 때만 활성
 ├── api/
 │   ├── deps.py              # verify_api_key, get_ml_client, get_prediction_service
 │   └── v1/{health,predict}.py
@@ -36,7 +37,8 @@ app/
 ├── ml/
 │   ├── base.py              # MLClient(ABC): predict/health/aclose
 │   ├── mock.py              # MockMLClient (결정적 인프로세스 스텁)
-│   ├── azure.py             # AzureMLClient (골격; 변환 2함수로 스키마 격리)
+│   ├── azure.py             # AzureMLClient (Designer 실연동; 변환 2함수로 스키마 격리)
+│   ├── comsume.py           # test4 엔드포인트 단독 스모크 스크립트(1회성, __main__ 가드)
 │   └── factory.py           # create_ml_client(settings)
 └── core/
     ├── errors.py            # AppError 계층
@@ -68,6 +70,8 @@ app/
 | D7 | Rate limit 인메모리+XFF "근사 보호" | 비영리·5일 적정 | Redis 공유 → 운영 비용·범위 초과 |
 | D8 | ML_TIMEOUT=504, ML_UNAVAILABLE/UPSTREAM=502 | 게이트웨이 의미상 정확 | 모두 502 → 의미 손실 |
 | D9 | Stateless 유지(인메모리 상태 의존 금지) | P0v3 오토스케일(다중 인스턴스) 전제 | 세션/캐시 의존 → scale-out 시 불일치 |
+| D10 | App Insights는 연결문자열 있을 때만 활성·없으면 no-op(OTel 지연 import) | 로컬/테스트/미승인 환경 무조건 안전 | 무조건 계측 → 의존성·기동 비용·실패점 증가 |
+| D11 | 자동계측 대신 `instrument_app`/`HTTPXClientInstrumentor` 명시 계측 | 자동계측이 requests/dependencies span 누락 사례 | distro 자동계측 → 호출순서 의존·누락 |
 
 ## 5. ML 추상화 상세
 
@@ -80,15 +84,16 @@ class MLClient(ABC):
 ```
 
 ### 5.2 Mock (`mock.py`)
-- `sha256(repr(inputs))` 상위 8자리 → `0xFFFFFFFF` 정규화 점수. 입력 동일 → 출력 동일.
+- 입력 행마다 `sha256(repr(sorted(row.items())))` 상위 8자리 → `0xFFFFFFFF` 정규화 점수. 입력 동일 → 출력 동일.
 - `model_version="mock-1.0"`, `elapsed_ms`는 `time.perf_counter` 측정.
 
-### 5.3 Azure (`azure.py`) — 골격
-- `httpx.AsyncClient` 재사용, `POST {scoring_uri}` + `Authorization: Bearer {key}`.
+### 5.3 Azure (`azure.py`) — Designer 실시간 엔드포인트 실연동
+- `httpx.AsyncClient` 재사용, `POST {scoring_uri}` + `Authorization: Bearer {key}`(엔드포인트 primary 우선·secondary 폴백).
 - **재시도**: 5xx/타임아웃 → 지수 백오프(`0.2 * 2**attempt`), 최대 `ml_max_retries`. 4xx → 즉시 `UpstreamError`.
 - **타임아웃** → `MLTimeoutError(504)`, 재시도 소진 → `MLUnavailableError(502)`.
-- **스키마 격리**: `_to_aml_payload`(현재 `{"input_data": inputs}`) / `_from_aml_response`. 실제 확정 시 **이 2함수만 수정**.
+- **스키마 격리**(test4 swagger로 검증된 계약): `_to_aml_payload`는 `{"Inputs":{"input1": inputs},"GlobalParameters":{}}`로 감싸고, `_from_aml_response`는 `Results` 행 배열에서 `Scored Labels`만 추출(출력 포트명 비의존). 실제 스키마 변경 시 **이 2함수만 수정**.
 - scoring_uri/key 미설정 시 `ValueError`(설정 누락 조기 발견).
+- ⚠️ ACI(Designer classic) 엔드포인트는 http 평문 → Bearer 키 평문 전송(테스트용 수용, HTTPS 전환은 범위 외).
 
 ### 5.4 팩토리 / 수명주기 (`factory.py`)
 - `ML_CLIENT==azure`면 지연 import 후 `AzureMLClient`, 아니면 `MockMLClient`.
@@ -105,6 +110,7 @@ class MLClient(ABC):
 | Rate limit | `slowapi` `Limiter(key_func=client_ip)` | `client_ip`가 XFF 우선 파싱 |
 | 요청 추적 | `RequestContextMiddleware` | X-Request-ID 생성/승계, 응답 헤더+로그 |
 | 에러 표준화 | 전역 핸들러(AppError/422/HTTP/500) | `jsonable_encoder`로 detail 직렬화 |
+| 관측성 | `configure_observability()` (Azure Monitor) | 연결문자열 있을 때만 활성·없으면 no-op(OTel 지연 import). FastAPI/httpx/logging 명시 계측 |
 
 ## 7. 설정 (환경변수)
 
@@ -125,18 +131,19 @@ class MLClient(ABC):
 ## 8. 테스트 전략
 
 - `ML_CLIENT=mock`로 전 구간 E2E. `httpx.ASGITransport`로 네트워크 없이 앱 직접 구동.
-- 커버(11건): liveness/readiness, request_id 생성·승계, 401(누락/오키), 200(정상·결정성·dict 입력), 422(알수없는필드·필수누락).
+- 커버(23건): liveness/readiness, request_id 생성·승계, 401(누락/오키), 200(정상·결정성·dict 입력), 422(알수없는필드·필수누락), AzureMLClient 변환/재시도/에러 매핑, 관측성 no-op.
 - **주의**: ASGITransport는 lifespan을 실행하지 않음 → `conftest`에서 `app.state.ml_client` 수동 설정.
 - 실행: `pytest` (`pytest.ini`: `asyncio_mode=auto`).
 
-## 9. 배포 (App Service · Code) — ⚠️ 실행은 승인 필요
+## 9. 배포 (App Service · Code) — ✅ 배포 완료 (재배포는 승인 필요)
 
 - **방식**: Oryx 빌드 기반 **Code 배포**(Docker 아님).
-- **startup.sh**: `gunicorn -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --timeout 600 app.main:app`.
-- **포트**: 8000(Python Blessed Image·gunicorn 기본).
-- **시크릿**: App Settings로 `API_KEY`, `AZURE_ML_*`, `CORS_ORIGINS`, `ML_CLIENT` 주입.
+- **자동화**: 멱등 스크립트 `deploy.sh` — App Settings 주입 → startup/헬스체크 설정 → zip OneDeploy → 스모크. OneDeploy의 transient 502(false-negative)에 내성(`/health` 200으로 성공 판정).
+- **startup.sh**: `gunicorn -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${PORT:-8000} --timeout 600 app.main:app`.
+- **포트**: App Service 주입 `PORT` 우선, 미설정 시 8000.
+- **시크릿**: App Settings로 `API_KEY`, `ML_CLIENT`, `AZURE_ML_SCORING_URI`, `AZURE_ML_AUTH_PRI_KEY`, `AZURE_ML_AUTH_SEC_KEY`, `CORS_ORIGINS`, `APPLICATIONINSIGHTS_CONNECTION_STRING` 주입.
 - **헬스체크 경로**: `/health`(무인증 → 플랫폼 프로브 통과).
-- **대상 리소스**(지시서): RG `project-1st-team-3` / Plan `ASP-project1stteam3-8d76`(P0v3:1) / App `app-mlbackend-prod-kc-01` / Korea Central.
+- **대상 리소스**: RG `project-1st-team-3` / Plan `ASP-project1stteam3-8d76`(P0v3:1) / App `app-mlbackend-prod-kc-01` / Korea Central.
 
 ## 10. 비기능 요구 (NFR)
 
@@ -150,7 +157,8 @@ class MLClient(ABC):
 
 ## 11. 향후 과제 (Tech Debt)
 
-- 실제 ML 연동(`azure.py` 변환 2함수) + 스키마 구체화.
+- 실제 ML 피처 스키마 확정 시 `inputs`/`predictions` 구체화(SPEC 동반 개정).
 - Redis 공유 스토리지 기반 전역 정밀 Rate limit(다중 인스턴스 정확성).
-- 구조적 로깅(JSON) 고도화, 메트릭/트레이싱(App Insights) 연동.
+- 구조적 로깅(JSON) 고도화. (메트릭/트레이싱 App Insights 연동은 0.2.0에서 완료.)
+- ACI 엔드포인트 HTTPS 전환(현재 http 평문).
 - CI(테스트 자동화)·배포 파이프라인.
