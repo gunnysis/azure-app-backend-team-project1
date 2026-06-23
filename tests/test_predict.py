@@ -1,16 +1,4 @@
-from tests.conftest import API_HEADERS
-
-# 검증된 계약(test4 swagger)의 입력 1행.
-SAMPLE_ROW = {
-    "prev_year_usage": 76,
-    "avg_temp": -0.46,
-    "avg_humidity": 66.55,
-    "total_rainfall": 21.1,
-    "current_usage": 53,
-    "thi": 36.1076813,
-    "month_sin": 0.5,
-    "month_cos": 0.8660254037844387,
-}
+from tests.conftest import API_HEADERS, SAMPLE_ROW  # 샘플은 스키마 단일 진실원에서
 
 
 async def test_predict_ok(client):
@@ -70,3 +58,23 @@ async def test_non_dict_row_rejected(client):
         "/api/v1/predict", json={"inputs": [1.0, 2.0, 3.0]}, headers=API_HEADERS
     )
     assert r.status_code == 422
+
+
+def test_swagger_example_is_a_valid_request():
+    # 재발방지: Swagger /docs 에 노출되는 예시가 단일 진실원에서 파생되고,
+    # 그 자체로 유효한 PredictRequest 여야 한다(예시-스키마 드리프트 차단).
+    from app.schemas.prediction import EXAMPLE_INPUT_ROW, PredictRequest
+
+    example = PredictRequest.model_json_schema()["example"]
+    assert example == {"inputs": [EXAMPLE_INPUT_ROW]}
+    PredictRequest.model_validate(example)  # raise 없이 통과해야 함
+
+
+async def test_predict_accepts_swagger_example(client):
+    # 문서화된 예시 페이로드가 실제 엔드포인트에서 200 이어야 한다(계약 일관성).
+    from app.schemas.prediction import PredictRequest
+
+    example = PredictRequest.model_json_schema()["example"]
+    r = await client.post("/api/v1/predict", json=example, headers=API_HEADERS)
+    assert r.status_code == 200
+    assert isinstance(r.json()["predictions"], list)

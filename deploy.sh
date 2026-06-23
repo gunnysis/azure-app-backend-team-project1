@@ -67,8 +67,10 @@ hc="$(curl -s -o /dev/null -w '%{http_code}' --retry 18 --retry-delay 12 --retry
 echo "GET /health -> ${hc}"
 [ "$hc" = "200" ] || { echo "ERROR: /health 가 200 이 아닙니다 — 로그: az webapp log tail -g $RG -n $APP" >&2; exit 1; }
 echo "POST /api/v1/predict ->"
+# 페이로드 계약의 단일 진실원: app/schemas/prediction.py::EXAMPLE_INPUT_ROW
+# (bash 라 직접 import 불가 — 계약 변경 시 그 상수와 함께 이 리터럴도 갱신할 것).
 curl -sS --max-time 60 -X POST "https://$HOST/api/v1/predict" \
   -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
-  -d '{"inputs":[{"prev_year_usage":76,"avg_temp":-0.46,"avg_humidity":66.55,"total_rainfall":21.1,"current_usage":53,"thi":36.1076813,"month_sin":0.5,"month_cos":0.8660254037844387}]}'
+  -d '{"inputs":[{"prev_year_usage":76,"avg_temperature":-0.46,"avg_humidity":66.55,"total_rainfall":21.1,"current_usage":53,"thi":36.1076813,"month_sin":0.5,"month_cos":0.8660254037844387}]}'
 echo
 echo "DONE."

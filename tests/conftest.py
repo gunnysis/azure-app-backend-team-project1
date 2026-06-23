@@ -20,8 +20,12 @@ from httpx import ASGITransport, AsyncClient  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.main import app  # noqa: E402
 from app.ml.factory import create_ml_client  # noqa: E402
+from app.schemas.prediction import EXAMPLE_INPUT_ROW  # noqa: E402
 
 API_HEADERS = {"X-API-Key": "test-key"}
+
+# 샘플 입력 1행은 스키마의 단일 진실원을 재사용(테스트 간 중복 제거).
+SAMPLE_ROW = EXAMPLE_INPUT_ROW
 
 
 @pytest_asyncio.fixture

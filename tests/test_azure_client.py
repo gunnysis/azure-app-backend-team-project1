@@ -12,18 +12,9 @@ import pytest
 from app.config import Settings
 from app.core.errors import MLTimeoutError, MLUnavailableError, UpstreamError
 from app.ml.azure import AzureMLClient
+from app.schemas.prediction import EXAMPLE_INPUT_ROW as SAMPLE_ROW  # 단일 진실원 재사용
 from app.schemas.prediction import PredictRequest
 
-SAMPLE_ROW = {
-    "prev_year_usage": 76,
-    "avg_temp": -0.46,
-    "avg_humidity": 66.55,
-    "total_rainfall": 21.1,
-    "current_usage": 53,
-    "thi": 36.1076813,
-    "month_sin": 0.5,
-    "month_cos": 0.8660254037844387,
-}
 REQ = PredictRequest(inputs=[SAMPLE_ROW])
 
 
