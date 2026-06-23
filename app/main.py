@@ -13,7 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from app.api.v1 import health, predict
+from app.api.v1 import adapter, health, predict
 from app.config import get_settings
 from app.core.exception_handlers import build_error_body, register_exception_handlers
 from app.core.middleware import RequestContextMiddleware
@@ -61,6 +61,7 @@ def create_app() -> FastAPI:
     # --- 라우터 ---
     app.include_router(health.router)
     app.include_router(predict.router)
+    app.include_router(adapter.router)
 
     # --- 미들웨어 (나중에 추가한 것이 바깥=먼저 실행) ---
     # CORS: 허용 출처가 명시된 경우에만 활성화.
