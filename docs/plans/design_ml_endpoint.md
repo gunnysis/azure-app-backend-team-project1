@@ -113,6 +113,10 @@ electricity_model/trained_model_outputs/
 
 > **정정(v5)**: 이전 본은 모델 아티팩트의 `score.py`/`_samples.json`(원시 행 배열)을 계약으로 추정했으나,
 > **실제 배포는 Designer 서빙 레이어가 그 위를 감싸** 외부 HTTP 계약이 다르다. 아래는 **배포된 `test4` swagger.json 실측**.
+>
+> ⚠️ **이력 주의(2026-06-23)**: 아래 표는 **구 `test4` 당시** 계약이다. 현 운영 엔드포인트(`final-endpoint`)는
+> `avg_temp`→**`avg_temperature`** 개명 + `prev_year_usage`·`current_usage` **int64→double** 로 바뀌었다.
+> **현행 계약은 [`../azure/info.md`](../azure/info.md) §5.1** 및 코드 단일 진실원 `app/schemas/prediction.py::EXAMPLE_INPUT_ROW` 참조.
 
 **요청 본문(`POST /score`, `Authorization: Bearer {key}`, http):**
 ```json
