@@ -135,8 +135,11 @@
 | `AZURE_ML_AUTH_PRI_KEY`, `AZURE_ML_AUTH_SEC_KEY` | `final-endpoint` **인증 키** (포털 "Consume" 탭) | ✅ **재주입 완료**(미커밋, primary≠secondary 32자) |
 | `API_KEY` | 백엔드 X-API-Key 기대값(강한 랜덤) | ✅ 주입(미커밋) |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | 기존 App Insights `team3ml0984223413` 연결문자열(재사용) | ✅ 주입(미커밋) |
+| `CORS_ORIGINS` | 프론트 SWA origin(`https://thankful-desert-0cdb08500.7.azurestaticapps.net`) | ✅ **설정 완료**(2026-06-23) — 빈 값이라 CORS 미들웨어 미적용 상태였음 |
 
 > ✅ **현 운영 상태(2026-06-23 전환 완료)**: App Settings를 `final-endpoint`(361d14db) URI + 신규 primary/secondary 키로 **재주입** 완료, 앱 재시작 후 **E2E 검증 통과**(`/health` 200, `/api/v1/predict` 200·`predictions` 반환·약 80ms). 구 `test4`(7924e88e)·`final-version`(517bf38a)은 재생성으로 삭제됨.
+>
+> ✅ **CORS 활성화(2026-06-23)**: SWA(`app-frontend-prod-kc-02`)에 linked-backend 가 없어(`az staticwebapp backends show`→`[]`) 프론트가 백엔드를 **브라우저 직접(cross-origin) 호출** → `CORS_ORIGINS` 가 비어 프리플라이트가 차단되던 상태. SWA origin 을 주입해 해결. 라이브 검증: `OPTIONS /api/v1/predict` → **200 + `Access-Control-Allow-Origin`**, 실제 `POST` 응답에도 ACAO 헤더 확인.
 
 ---
 
@@ -155,6 +158,8 @@
 - [x] `app/ml/comsume.py` 스모크 + `AzureMLClient` E2E 라이브 검증 성공
 - [x] **운영 배포**: App Service에 키/URI·`ML_CLIENT=azure` App Settings 주입 + `deploy.sh`(OneDeploy) → `/health`·`/api/v1/predict` 200
 - [x] **Application Insights 활성** + 알림/가용성 테스트 구성(§8)
+- [x] **OTel 405→500 버그 수정·배포(2026-06-23)** — `opentelemetry-instrumentation-fastapi` 0.61b0 의 `_get_route_details` 가 `Match.PARTIAL`(메서드 불일치=405) 분기에서 `route.path` 를 try/except 없이 접근 → `include_router(prefix=…)` 의 `_IncludedRouter`(`.path` 없음)에서 `AttributeError` → 요청이 **500** 으로 떨어짐. **App Insights 활성 운영에서만 발현**(평시 pytest는 계측 미적용이라 못 잡음). 모든 405·CORS preflight(OPTIONS)·일부 헬스 프로브가 500 오염. **수정**: `app/observability.py` 에 멱등 가드(`_install_otel_partial_match_guard`)로 모듈 전역 span-details 함수 방어 래핑(계측 전 1회) + 회귀 테스트 2종. 라이브 검증: GET/POST 메서드 불일치 → **405**(이전 500).
+- [x] **CORS 설정·배포(2026-06-23)** — SWA cross-origin 직접 호출용 `CORS_ORIGINS` 주입(§6). 프리플라이트 200 + ACAO 헤더 라이브 검증.
 - [x] **Backend↔ML HTTPS 전환 — 보류(Reject) 결정(2026-06-23)**: 마감 임박(2일 전)으로 미적용. ML 호출은 평문(HTTP) 유지 + 보상통제(키 이중화·전송 최소화·App Insights 이상호출 알림)로 리스크 수용. 연구/제안서는 [`../plans/rejected/how_to_https_MLandBackend.md`](../plans/rejected/how_to_https_MLandBackend.md) 보존(재개 시 옵션 B=v2 관리형 엔드포인트 출발점, v1 EOL 2026-06-30 감안).
 
 ---
@@ -176,3 +181,5 @@
 > 알림 수신: 액션 그룹 이메일로 발송(최초 1회 Azure 구독 확인 메일 옵트인 필요).
 > 포털: App Insights → Application Map / Failures / Availability 로 확인.
 > 가용성 리전 추가는 포털에서 1클릭(현재 CLI 제약으로 3개 설정).
+
+> ⚠️ **계측 자체의 함정(2026-06-23 해결, §7)**: OTel FastAPI 계측 0.61b0 의 `_get_route_details` 버그로 **모든 405·OPTIONS 프리플라이트가 500** 으로 떨어져, `alert-server-exceptions`(서버 예외>0)를 상시 트리거하고 Failures 를 오염시켰다. `app/observability.py` 가드로 수정. 텔레메트리 헬퍼는 요청을 깨선 안 된다는 원칙(span 이름 실패 시 메서드명 폴백)으로 재발방지.
