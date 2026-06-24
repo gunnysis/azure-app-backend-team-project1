@@ -1,7 +1,7 @@
 # 개발 계획서 — ML 무반응(발견 C) 해소: `prev_year_usage` 신호 라우팅
 
 > 문서 성격: 발견 C(라이브 ML이 에어컨 입력 무시)의 **근본 해결 개발 계획서** — **구현 설계 전 단계(방식·캘리브레이션 확정)**.
-> 작성일: 2026-06-24 · 상태: **✅ 구현·로컬검증 완료(48 passed·정합 220케이스 0불일치) → 배포 승인 대기** · 짝 문서: [`electric_calculator_act_checklist.md`](electric_calculator_act_checklist.md)(과제)
+> 작성일: 2026-06-24 · 상태: **✅ 구현·배포·라이브검증 완료(발견 C 해소)** · 짝 문서: [`electric_calculator_act_checklist.md`](electric_calculator_act_checklist.md)(과제)
 > 관련: [`../user_flow_review.md`](../user_flow_review.md) §6 발견 C, [`design_fallback_parity.md`](design_fallback_parity.md)(F4), 메모리 [[ml-model-ignores-current-usage]]
 > 검증: 프로덕션 `/predict` 스윕 + **AML 워크스페이스 직접 데이터 포렌식**. 본 문서 수치는 전부 실측(보간 아님).
 
@@ -184,7 +184,7 @@ return round(prev_year_feature, 2), round(usage, 2)
 - [x] **듀티 0.60 / clamp 400 확정**: ✅ §5-3 라이브 검증(0h→141, 24h→363, 단조).
 - [x] **구현 완료(커밋)**: ✅ 백엔드 `feature_builder`(`15d1e84`) + 프론트 미러(`2b4b441`). 어댑터·스키마 불변.
 - [x] **로컬 검증**: ✅ pytest 48 passed(회귀 4종 추가) · 프론트↔백엔드 정합 그리드 220케이스 0 불일치 · 백엔드 prev 곡선 = 라이브 /predict 검증값 일치.
-- [ ] **배포 승인 대기**: 백엔드 `deploy.sh`(실배포) + 프론트 push(=SWA 배포) **승인 필수**. 배포 후 §8-2 라이브 스윕(hours 0→24 단조·predicted>baseline)으로 최종 확인.
+- [x] **배포·라이브검증 완료**: ✅ 백엔드 `deploy.sh`(`RuntimeSuccessful`)·프론트 SWA(success). 라이브 `/estimate` 스윕 — predicted **141→157→184→205→220→259→313→350→363**(0~24h 단조)·baseline 141 고정(predicted>baseline 전구간). **사용자 보고 증상 해소 확정.**
 - [ ] **장기(C)**: 에어컨↔사용량 라벨 데이터 수집 후 재학습 — 별도 안건.
 
 ---
