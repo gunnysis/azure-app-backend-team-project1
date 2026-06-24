@@ -43,7 +43,7 @@ class EstimateRequest(BaseModel):
     #-----------------------------
     # month: int | None = Field(default=None, ge=1, le=12)
     # custom 8월 기준으로 예측
-    month = 8
+    month:int = 8
 
 class EstimateResponse(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
