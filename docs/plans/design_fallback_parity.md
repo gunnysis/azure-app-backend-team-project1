@@ -96,7 +96,7 @@ current = _clamp(BASE_MONTHLY_KWH + aircon_kwh, USAGE_MIN_KWH, USAGE_MAX_KWH)  #
 // ⚠️ 동기화 필수: 아래 상수·산식은 azure-app-backend
 //    app/services/feature_builder.py(estimate_usage)와 1:1 일치해야 한다.
 //    한쪽을 바꾸면 반드시 다른 쪽도 함께 바꿀 것(폴백↔라이브 수치 정합).
-const USAGE_BASE_MONTHLY_KWH = 132;            // BASE_MONTHLY_KWH
+const USAGE_BASE_MONTHLY_KWH = 115;            // BASE_MONTHLY_KWH
 const USAGE_DAYS_PER_MONTH = 30;               // DAYS_PER_MONTH
 const USAGE_TYPE_DEFAULT_POWER_W = { fixed: 760, inverter: 560, unknown: 650, none: 0 };
 const USAGE_TYPE_MULTIPLIER     = { fixed: 1.1, inverter: 0.92, unknown: 1.0, none: 0.0 };

@@ -28,7 +28,7 @@ from app.data.seoul_climate import monthly_weather
 # ⚠️ 동기화 필수: 프론트 azure-app-frontend/script.js 의 USAGE_* 상수 + estimateUsageKwh()
 #   와 1:1 일치해야 한다(폴백↔라이브 예측 kWh 정합). 한쪽을 바꾸면 반드시 양쪽을 함께 바꿀 것.
 #   별도 레포·무빌드라 모듈 공유 불가 → 이 주석이 유일한 정합 계약(검증: scratchpad parity_check).
-BASE_MONTHLY_KWH = 132.0  # 에어컨 외 기저 사용량(원룸 1인). 프론트 USAGE_BASE_MONTHLY_KWH와 동일.
+BASE_MONTHLY_KWH = 115.0  # 에어컨 외 기저 사용량(원룸 1인). 프론트 USAGE_BASE_MONTHLY_KWH와 동일.
 DAYS_PER_MONTH = 30
 # 에어컨 타입별 기본 소비전력(W) — 사용자가 전력을 모를 때의 대체값.
 TYPE_DEFAULT_POWER_W: dict[str, int] = {
