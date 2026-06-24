@@ -7,7 +7,13 @@
   - avg_temperature/avg_humidity/total_rainfall : 마포(서울 108) 월별 기후평년값 룩업
   - month_sin/month_cos                         : 월의 삼각함수 인코딩
   - thi                                         : 기온·습도에서 한국 불쾌지수 공식으로 계산
-  - prev_year_usage/current_usage               : BASELINE + 에어컨 기여분으로 *추정*
+  - prev_year_usage                             : 에어컨 보정 사용량(= 모델이 실제 반응하는 피처)
+  - current_usage                               : 동일 추정치(라벨 슬롯 — 모델은 무시, echo·폴백용)
+
+발견 C(메모리 ml-model-ignores-current-usage): 배포 모델은 `current_usage`를 *학습 라벨*로
+취급해 입력으로 무시한다. 모델이 실제 반응하는 피처는 `prev_year_usage`(라벨과 상관 0.85)이므로
+에어컨 신호를 그 슬롯에 싣는다(설계: docs/plans/electric_calculator_act_plan.md). 즉 prev_year_usage는
+더 이상 "작년 상수"가 아니라 "에어컨 보정 사용량(모델 핸들)"이다.
 
 주의: prev_year_usage/current_usage는 실측 검침값이 아니라 추정치다(프론트가 사용량을
 수집하지 않음). 따라서 결과는 추정 모델 입력에 기반한 추정이다. 사용량 추정 상수는
@@ -42,6 +48,13 @@ FALLBACK_POWER_W = 650
 # 모델 학습 분포를 크게 벗어난 입력 방지용 클램프(프론트와 동일 범위).
 USAGE_MIN_KWH = 85.0
 USAGE_MAX_KWH = 650.0
+SHORT_RUN_BONUS_KWH = 8.0  # 0<h≤1 단시간 가동의 고정 점화/대기 비용. 프론트 SHORT_RUN_BONUS_KWH와 동일.
+
+# --- 발견 C 대응: 에어컨 신호를 모델 반응 피처(prev_year_usage)로 라우팅 ---
+# 설계·근거: docs/plans/electric_calculator_act_plan.md (라이브 /predict 캘리브레이션).
+# 모델은 current_usage를 라벨로 무시하고 prev_year_usage(상관 0.85)에 반응 → 신호를 그쪽에 싣는다.
+AIRCON_DUTY_CYCLE = 0.60  # 압축기 평균 가동률 + 모델 반응대역[132,400] 적합. 프론트 USAGE_DUTY_CYCLE와 동일.
+MODEL_PREV_MAX_KWH = 400.0  # prev_year_usage 모델 반응 상한(>400 포화 — 라벨 클립 max500). 프론트는 폴백 표시 상한으로 미러.
 
 
 def compute_thi(temp_c: float, humidity_pct: float) -> float:
@@ -63,23 +76,28 @@ def estimate_usage(
     aircon_power_w: float | None,
     aircon_type: str,
 ) -> tuple[float, float]:
-    """(prev_year_usage, current_usage) 추정치 반환.
+    """(prev_year_usage, current_usage) 피처값 반환 — 둘 다 에어컨 보정 사용량.
 
-    prev_year_usage = 기저 사용량(에어컨 델타 없는 작년 동월 기준값).
-    current_usage   = 기저 + 올해 에어컨 습관 기여분.
+    발견 C 대응: 모델이 반응하는 prev_year_usage 슬롯에 에어컨 신호를 싣는다(모듈 docstring).
+    prev_year_usage = clamp(기저 + 에어컨 기여, 85, MODEL_PREV_MAX) — 모델 입력(>400 포화 회피).
+    current_usage   = clamp(기저 + 에어컨 기여, 85, 650)            — 라벨 슬롯(모델 무시), echo·폴백용.
+    baseline 행(에어컨 0h·type=none → multiplier 0)은 기여 0 → prev=기저(132) = 계절 기준선.
     """
     default_power = TYPE_DEFAULT_POWER_W.get(aircon_type, FALLBACK_POWER_W)
     power_w = aircon_power_w or default_power or FALLBACK_POWER_W
     power_kw = power_w / 1000.0
     multiplier = TYPE_MULTIPLIER.get(aircon_type, 1.0)
 
-    aircon_kwh = aircon_hours_per_day * DAYS_PER_MONTH * power_kw * multiplier
+    # 듀티사이클: 설정시간 내 압축기 평균 가동률. 모델 반응대역에 0~24h를 펼치는 보정(설계 §5-3).
+    aircon_kwh = (
+        aircon_hours_per_day * DAYS_PER_MONTH * power_kw * multiplier * AIRCON_DUTY_CYCLE
+    )
     if 0 < aircon_hours_per_day <= 1:
-        aircon_kwh += 8  # 단시간 가동의 고정 점화/대기 비용(프론트와 동일 보정).
+        aircon_kwh += SHORT_RUN_BONUS_KWH  # 단시간 점화/대기 비용(듀티 미적용, 프론트 정합).
 
-    current = _clamp(BASE_MONTHLY_KWH + aircon_kwh, USAGE_MIN_KWH, USAGE_MAX_KWH)
-    prev_year = BASE_MONTHLY_KWH
-    return round(prev_year, 2), round(current, 2)
+    usage = _clamp(BASE_MONTHLY_KWH + aircon_kwh, USAGE_MIN_KWH, USAGE_MAX_KWH)
+    prev_year_usage = min(usage, MODEL_PREV_MAX_KWH)  # 모델 반응 피처(포화 상한 적용).
+    return round(prev_year_usage, 2), round(usage, 2)
 
 
 def build_features(

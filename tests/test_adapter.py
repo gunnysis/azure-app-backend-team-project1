@@ -12,7 +12,9 @@ from app.main import app
 from app.ml.base import MLClient
 from app.schemas.prediction import EXAMPLE_INPUT_ROW, PredictRequest, PredictResponse
 from app.services.feature_builder import (
+    AIRCON_DUTY_CYCLE,
     BASE_MONTHLY_KWH,
+    MODEL_PREV_MAX_KWH,
     build_features,
     compute_thi,
     estimate_usage,
@@ -178,15 +180,45 @@ def test_usage_increases_with_hours():
     _, low = estimate_usage(2, None, "inverter")
     _, high = estimate_usage(10, None, "inverter")
     assert high > low
-    # prev_year_usage는 기저 고정.
-    prev, _ = estimate_usage(10, None, "inverter")
-    assert prev == pytest.approx(BASE_MONTHLY_KWH)
 
 
 def test_usage_clamped_to_model_range():
     # 비현실적으로 긴 가동도 학습 분포 상한으로 클램프.
     _, current = estimate_usage(24, 2000, "fixed")
     assert current <= 650.0
+
+
+# --- 발견 C 회귀 방지: 에어컨 신호를 prev_year_usage(모델 반응 피처)로 라우팅 ---
+
+
+def test_prev_year_usage_routes_aircon_signal():
+    # 핵심 수정: 모델이 무시하는 current_usage 대신 prev_year_usage가 에어컨 시간에 반응해야 한다.
+    # (발견 C 증상이 "시간 스윕 시 상수"였으므로 단조 증가를 테스트로 고정.)
+    prevs = [estimate_usage(h, None, "unknown")[0] for h in (0, 6, 12, 18)]
+    assert prevs == sorted(prevs) and prevs[0] < prevs[-1]
+    assert prevs[0] == pytest.approx(BASE_MONTHLY_KWH)  # 0시간 → 기저(계절 기준선)
+
+
+def test_prev_year_usage_clamped_to_model_max():
+    # prev_year_usage는 모델 포화 회피를 위해 MODEL_PREV_MAX_KWH(400)로 클램프(>400 진입 차단).
+    prev, current = estimate_usage(24, 2000, "fixed")
+    assert prev == pytest.approx(MODEL_PREV_MAX_KWH)
+    assert current >= prev  # current(라벨 슬롯)는 더 큰 추정치를 보존(650 상한)
+
+
+def test_baseline_row_stays_at_base_usage():
+    # 어댑터 baseline 행(0시간·type=none) → prev=current=기저 → 계절 기준선 보존.
+    assert estimate_usage(0, 0, "none") == (
+        pytest.approx(BASE_MONTHLY_KWH),
+        pytest.approx(BASE_MONTHLY_KWH),
+    )
+
+
+def test_duty_cycle_applied_to_aircon_contribution():
+    # 듀티(0.60)가 에어컨 기여분에 곱해진다(모델 반응대역 캘리브레이션, 설계 §5-3).
+    prev, _ = estimate_usage(4, None, "unknown")  # power 650W, mult 1.0
+    expected = BASE_MONTHLY_KWH + 4 * 30 * 0.65 * 1.0 * AIRCON_DUTY_CYCLE
+    assert prev == pytest.approx(expected)
 
 
 def test_build_features_has_all_eight_keys():
