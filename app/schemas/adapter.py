@@ -48,6 +48,11 @@ class EstimateResponse(BaseModel):
 
     # 프론트 normalizePredictionResponse가 요구하는 필수 필드.
     predicted_kwh: float
+    # 같은 ML 호출에 동봉한 '에어컨 OFF·동월·동일 기상' 예측 = 계절성 기준 사용량.
+    # 프론트가 비교 기준으로 사용(없으면 프론트 기본값 165kWh로 폴백). 모델 응답이 행을
+    # 1개만 주는 등 baseline 행이 비면 None → 프론트 폴백. 요금은 프론트가 kWh에서
+    # 단일 요금식으로 계산(요금식 이중화·드리프트 방지 — 백엔드는 bill을 내려주지 않음).
+    baseline_kwh: float | None = None
     # 모델이 사용한 입력 월(디버깅/투명성).
     month: int
     model_version: str | None = None

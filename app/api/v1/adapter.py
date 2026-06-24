@@ -6,14 +6,16 @@
 합성한 뒤 기존 PredictionService를 그대로 재사용한다(ML 경로 단일화).
 """
 
+import asyncio
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from starlette.requests import Request
 
 from app.api.deps import get_prediction_service
 from app.config import get_settings
-from app.core.errors import UpstreamError
+from app.core.errors import MLTimeoutError, UpstreamError
 from app.core.ratelimit import limiter
 from app.schemas.adapter import EstimateRequest, EstimateResponse
 from app.schemas.errors import ErrorResponse
@@ -36,12 +38,11 @@ router = APIRouter(
 )
 
 
-def _extract_predicted_kwh(predictions: list) -> float:
-    """모델 응답에서 단일 예측 kWh를 추출한다(행 1건 입력 → 점수 1건)."""
-    if not predictions:
-        raise UpstreamError("ML response contained no predictions.")
-    value = predictions[0]
-    # Azure Designer는 점수를 dict로 감싸 줄 수 있다("Scored Labels" 등).
+def _coerce_score(value: Any) -> float:
+    """모델 응답의 점수 1건을 float로 정규화한다.
+
+    Azure Designer는 점수를 dict로 감싸 줄 수 있다("Scored Labels" 등).
+    """
     if isinstance(value, dict):
         for key in ("Scored Labels", "scored_labels", "prediction", "result"):
             if key in value:
@@ -51,7 +52,7 @@ def _extract_predicted_kwh(predictions: list) -> float:
         return float(value)
     except (TypeError, ValueError) as exc:
         raise UpstreamError(
-            "ML response prediction was not numeric.", detail={"value": predictions[0]}
+            "ML response prediction was not numeric.", detail={"value": value}
         ) from exc
 
 
@@ -62,6 +63,7 @@ async def estimate(
     payload: EstimateRequest,
     service: PredictionService = Depends(get_prediction_service),
 ) -> EstimateResponse:
+    settings = get_settings()
     month = payload.month or datetime.now(KST).month
     features = build_features(
         month=month,
@@ -69,10 +71,36 @@ async def estimate(
         aircon_power_w=payload.aircon_power_w,
         aircon_type=payload.aircon_type,
     )
-    result = await service.predict(PredictRequest(inputs=[features]))
-    predicted_kwh = _extract_predicted_kwh(result.predictions)
+    # baseline = 같은 월·기상에서 '에어컨 OFF' 가정의 사용량(계절성 기준선). 별도 ML 호출이
+    # 아니라 같은 요청에 2행으로 동봉 → predictions[0]=사용자, predictions[1]=기준선.
+    # (Azure 스코어링은 입력 행당 출력 행 1개. 추가 호출·과금 없음.)
+    baseline_features = build_features(
+        month=month, aircon_hours_per_day=0, aircon_power_w=0, aircon_type="none"
+    )
+
+    # 총 wall-clock 예산 강제: httpx per-operation 타임아웃은 재시도 누적 시 프론트 abort(8s)를
+    # 넘길 수 있다. asyncio.timeout 초과 시 진행 중인 업스트림 요청이 취소(재시도 낭비 차단)되고
+    # 즉시 504(ML_TIMEOUT) → 프론트는 graceful fallback. 예산은 프론트 abort보다 낮게 설정.
+    try:
+        async with asyncio.timeout(settings.estimate_ml_deadline_s):
+            result = await service.predict(
+                PredictRequest(inputs=[features, baseline_features])
+            )
+    except TimeoutError as exc:
+        raise MLTimeoutError() from exc
+
+    if not result.predictions:
+        raise UpstreamError("ML response contained no predictions.")
+    predicted_kwh = round(_coerce_score(result.predictions[0]), 2)
+    # baseline 행이 비면(모델이 행 1개만 반환 등) None → 프론트가 기본 기준값으로 폴백.
+    baseline_kwh = (
+        round(_coerce_score(result.predictions[1]), 2)
+        if len(result.predictions) > 1
+        else None
+    )
     return EstimateResponse(
-        predicted_kwh=round(predicted_kwh, 2),
+        predicted_kwh=predicted_kwh,
+        baseline_kwh=baseline_kwh,
         month=month,
         model_version=result.model_version,
         elapsed_ms=result.elapsed_ms,

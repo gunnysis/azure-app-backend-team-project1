@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     ml_timeout_connect: float = 5.0
     ml_timeout_read: float = 30.0
     ml_max_retries: int = 2
+    # 브라우저용 /api/v1/estimate 의 ML 호출 총 wall-clock 예산(초). httpx 타임아웃은
+    # per-operation 이라 재시도×read 가 누적되면 수십 초까지 늘 수 있다(공식 문서 확인).
+    # 어댑터가 이 값으로 asyncio.timeout 총 예산을 강제 → 프론트 abort(8s)보다 낮게 두어
+    # ① 프론트가 살아있는 백엔드를 선점하지 않고 ② 예산 초과 시 재시도 낭비 없이 즉시 504.
+    # (서버-서버용 /api/v1/predict 는 이 예산을 적용하지 않고 전체 재시도 예산을 유지.)
+    estimate_ml_deadline_s: float = 6.0
 
     # --- Observability (Azure Monitor / Application Insights) ---
     # 연결문자열이 있으면 텔레메트리 활성, 없으면 런타임 no-op. (시크릿 — App Settings/.env 주입)

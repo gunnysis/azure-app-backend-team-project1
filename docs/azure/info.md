@@ -183,3 +183,24 @@
 > 가용성 리전 추가는 포털에서 1클릭(현재 CLI 제약으로 3개 설정).
 
 > ⚠️ **계측 자체의 함정(2026-06-23 해결, §7)**: OTel FastAPI 계측 0.61b0 의 `_get_route_details` 버그로 **모든 405·OPTIONS 프리플라이트가 500** 으로 떨어져, `alert-server-exceptions`(서버 예외>0)를 상시 트리거하고 Failures 를 오염시켰다. `app/observability.py` 가드로 수정. 텔레메트리 헬퍼는 요청을 깨선 안 된다는 원칙(span 이름 실패 시 메서드명 폴백)으로 재발방지.
+
+---
+
+## 9. 프론트 연동 점검 — 어댑터 강건화(2026-06-24)
+
+프론트(`azure-app-frontend`)↔백엔드 `/api/v1/estimate` 연동 점검에서 발견한 3건을 근본 해결. **모두 백엔드/문서만 수정**(프론트 코드 불변 — 프론트는 이미 `baseline_kwh` 수용 설계).
+
+### 9.1 타임아웃 예산 불일치 → 총 wall-clock 예산 강제
+- **근본 원인**: `httpx` 타임아웃은 **per-operation**(connect/read/write/pool 각각)이라 총 예산이 없다([공식 문서](https://www.python-httpx.org/advanced/timeouts/)). `azure.py` 재시도 루프는 `time.perf_counter()`로 **측정만** 하고 강제하지 않아, `read=30s × (재시도 2회+1) + 백오프` ≈ **최악 ~105s**. 프론트는 8s 에서 abort → ML 이 8s 만 넘으면 사용자는 **항상 mock**(`source=fallback`)을 받고, 백엔드는 클라가 떠난 뒤에도 재시도(낭비).
+- **해결**: 브라우저용 `/estimate` 만 `asyncio.timeout(estimate_ml_deadline_s)`(기본 **6.0s**, `config.py`)로 총 예산 강제. 초과 시 진행 중 업스트림 요청이 **취소**(재시도 낭비 차단)되고 즉시 **504 ML_TIMEOUT** → 프론트 graceful fallback. 예산을 프론트 abort(8s)보다 낮게 둬 **프론트가 살아있는 백엔드를 선점하지 않음**. (서버-서버용 `/predict` 는 전체 재시도 예산 유지 — 범위 분리.)
+- **재발방지**: `test_estimate_timeout_returns_504_within_budget`(5s 스텁을 0.1s 예산으로 끊는지 시간으로 검증).
+
+### 9.2 baseline 미제공(고정 165 비교) → 계절성 model-based 기준선
+- **근본 원인**: `EstimateResponse` 에 기준 사용량이 없어 프론트가 **항상 고정 165kWh** 로 비교(월·기상 무관).
+- **해결**: 같은 ML 호출에 **'에어컨 OFF·동월·동일 기상' 1행을 동봉**(`inputs=[user, baseline]`) → `predictions[1]` = 계절성 기준선. 응답에 `baseline_kwh` 추가. Azure 스코어링은 입력 행당 출력 행 1개([MS Learn](https://learn.microsoft.com/en-us/azure/machine-learning/how-to-batch-scoring-script?view=azureml-api-2))라 **추가 호출·과금 없음**. 모델이 행 1개만 주면 `baseline_kwh=None` → 프론트 폴백(graceful). **요금(bill)은 백엔드가 내려주지 않음** — 프론트 단일 요금식 유지(요금 로직 이중화·드리프트 방지).
+- **재발방지**: `test_estimate_baseline_*` 3종(존재·AC OFF시 predicted==baseline 불변식·AC ON시 상이·행 1개 graceful).
+
+### 9.3 문서 드리프트
+- 프론트 `API_CONTRACT.md` §4/§5/§8 갱신: 응답은 `baseline_kwh` 제공(계절성), `estimated_bill`/`baseline_bill` 은 **백엔드 미제공**(프론트 계산), 타임아웃 좌표 정합(프론트 8s > 백엔드 6s) 명시.
+
+> pytest 44 passed(기존 39 + 신규 5). `/predict`(서버-서버) 동작 불변. **라이브 검증 잔여**: 실제 Azure 엔드포인트가 2행 입력에 2행을 반환하는지 운영에서 1회 확인 권장(스코어링 규약상 정상이나 실측 미수행) — 만일 1행만 반환해도 `baseline_kwh=None` 폴백으로 안전.

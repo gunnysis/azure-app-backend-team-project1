@@ -1,17 +1,43 @@
 """어댑터 엔드포인트(/api/v1/estimate) + 피처빌더 테스트."""
 
+import asyncio
 import math
+import time
 
 import pytest
 
 from app.data.seoul_climate import monthly_weather
-from app.schemas.prediction import EXAMPLE_INPUT_ROW
+from app.config import get_settings
+from app.main import app
+from app.ml.base import MLClient
+from app.schemas.prediction import EXAMPLE_INPUT_ROW, PredictRequest, PredictResponse
 from app.services.feature_builder import (
     BASE_MONTHLY_KWH,
     build_features,
     compute_thi,
     estimate_usage,
 )
+
+
+class _SlowML(MLClient):
+    """예산 초과를 유발하는 느린 스텁(타임아웃 강제 검증용)."""
+
+    async def predict(self, request: PredictRequest) -> PredictResponse:
+        await asyncio.sleep(5)
+        return PredictResponse(predictions=[0.5, 0.4], model_version="slow", elapsed_ms=5000)
+
+    async def health(self) -> bool:
+        return True
+
+
+class _SingleRowML(MLClient):
+    """행을 1개만 반환하는 스텁(baseline 행 결측 시 graceful degrade 검증용)."""
+
+    async def predict(self, request: PredictRequest) -> PredictResponse:
+        return PredictResponse(predictions=[0.5], model_version="single", elapsed_ms=1.0)
+
+    async def health(self) -> bool:
+        return True
 
 ESTIMATE = "/api/v1/estimate"
 SAMPLE_INPUT = {
@@ -71,6 +97,53 @@ async def test_estimate_minimal_payload(client):
     feats = r.json()["features_used"]
     # 0시간 → current_usage == 기저 사용량.
     assert feats["current_usage"] == pytest.approx(BASE_MONTHLY_KWH)
+
+
+# --- baseline (계절성 기준선) ---
+
+
+async def test_estimate_returns_baseline_kwh(client):
+    # 백엔드가 동적 기준선을 함께 내려준다(프론트 고정 165 폴백 대체).
+    r = await client.post(ESTIMATE, json=SAMPLE_INPUT)
+    assert isinstance(r.json()["baseline_kwh"], (int, float))
+
+
+async def test_estimate_baseline_equals_prediction_when_aircon_off(client):
+    # 0시간 → 사용자 피처 == baseline 피처(둘 다 에어컨 OFF·동월) → 두 점수 동일해야 한다.
+    r = await client.post(ESTIMATE, json={"aircon_hours_per_day": 0, "month": 7})
+    body = r.json()
+    assert body["baseline_kwh"] == body["predicted_kwh"]
+
+
+async def test_estimate_baseline_differs_when_aircon_on(client):
+    # 6시간 → 사용자 피처 ≠ baseline 피처 → 기준선이 무에어컨 기준을 반영(다른 값).
+    body = (await client.post(ESTIMATE, json=SAMPLE_INPUT)).json()
+    assert body["baseline_kwh"] != body["predicted_kwh"]
+
+
+async def test_estimate_baseline_none_when_single_prediction(client):
+    # 모델이 행 1개만 반환해도 깨지지 않고 baseline=None 으로 graceful degrade.
+    app.state.ml_client = _SingleRowML()
+    r = await client.post(ESTIMATE, json=SAMPLE_INPUT)
+    body = r.json()
+    assert r.status_code == 200
+    assert body["baseline_kwh"] is None
+    assert isinstance(body["predicted_kwh"], (int, float))
+
+
+# --- 타임아웃 총 예산 강제 (① 근본 해결 회귀 방지) ---
+
+
+async def test_estimate_timeout_returns_504_within_budget(client, monkeypatch):
+    # 예산(0.1s)을 넘는 ML 호출은 재시도 낭비 없이 즉시 504 — 5s sleep을 끊었는지로 확인.
+    monkeypatch.setattr(get_settings(), "estimate_ml_deadline_s", 0.1)
+    app.state.ml_client = _SlowML()
+    start = time.perf_counter()
+    r = await client.post(ESTIMATE, json=SAMPLE_INPUT)
+    elapsed = time.perf_counter() - start
+    assert r.status_code == 504
+    assert r.json()["error"]["code"] == "ML_TIMEOUT"
+    assert elapsed < 2.0  # 5s 스텁이 예산에서 잘려 빠르게 반환(낭비 차단)
 
 
 # --- 피처빌더 단위 ---
