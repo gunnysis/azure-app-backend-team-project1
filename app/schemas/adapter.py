@@ -40,8 +40,10 @@ class EstimateRequest(BaseModel):
     aircon_power_w: float | None = Field(default=None, ge=0)
     aircon_type: AirconType = "unknown"
     # 예측 대상 월(1~12). 생략 시 서버의 현재 월(KST)을 사용.
-    month: int | None = Field(default=None, ge=1, le=12)
-
+    #-----------------------------
+    # month: int | None = Field(default=None, ge=1, le=12)
+    # custom 8월 기준으로 예측
+    month = 8
 
 class EstimateResponse(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
