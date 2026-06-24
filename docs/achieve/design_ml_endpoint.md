@@ -135,6 +135,20 @@ electricity_model/trained_model_outputs/
 
 > 이전 백엔드 가정(`{"input_data":…}`/`"predictions"`)은 이 계약과 **불일치(실버그)**였고 → §8에서 근본 수정(구현 완료).
 
+### 2.1 ⚠️ 피처 의미 — `current_usage`는 라벨이라 무시됨 (발견 C, 2026-06-24)
+
+8개 피처가 **계약상 필수**라고 모델이 **모두에 반응**하는 건 아니다. 라이브 프로덕션 스윕 + AML 데이터 포렌식으로 확정:
+
+| 피처 | 모델에서의 역할 | 연동 함의 |
+|---|---|---|
+| **`prev_year_usage`** | **단일 지배 예측자**(상관 0.85). `Scored Labels ≈ prev_year_usage`(prev∈[85,400], >400 포화) | **에어컨 습관 신호는 반드시 이 슬롯으로** 라우팅해야 모델이 반응 |
+| `current_usage` | **학습 라벨(예측 타깃)** — 모델은 이를 *나머지 피처로 예측*. 입력 슬롯에 넣어도 **무시** | 여기에 에어컨 신호를 넣으면 `predicted` 불변(발견 C의 증상) |
+| `avg_temperature`·`avg_humidity`·`total_rainfall`·`thi`·`month_sin`·`month_cos` | 보조(상관 ~0.2) | 계절성. `/estimate`는 월별 평년값으로 채움 |
+
+- **근본 원인**: 학습 모델은 Boosted Decision Tree Regression이고 학습 CSV에서 `current_usage`가 **타깃 컬럼**이다. 학습 데이터에 **에어컨/행동 변수가 전무** → 기존 데이터 재학습으로는 에어컨 반응을 만들 수 없음(진짜 ML 수정은 가구별 라벨 데이터 수집 필요 = MVP 범위 밖).
+- **현행 해법(Approach A)**: 백엔드 `feature_builder.estimate_usage`가 에어컨 추정치를 **`prev_year_usage`** 로 라우팅(듀티 0.60, `MODEL_PREV_MAX_KWH=400` 포화 회피 clamp). 라이브 검증: `predicted` 141→363(에어컨 0→24h 단조), `predicted>baseline` 전구간.
+- 상세: [`../plans/electric_calculator_act_plan.md`](../plans/electric_calculator_act_plan.md), [`../user_flow_review.md`](../user_flow_review.md) §6. **`feature_builder` 수정 시 필독.**
+
 ---
 
 ## 3. 리스크 / 근본 분석

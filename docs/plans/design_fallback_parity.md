@@ -4,6 +4,11 @@
 > 상태: **✅ 구현 완료 — 푸시(=SWA 배포) 대기**. 승인: ⓐ(권장)·Q2 yes·Q3 유지. 작성·구현: 2026-06-24.
 > 근거: 양 레포 코드 정독 — 프론트 `azure-app-frontend/script.js`(`localMockPredict` L298-313, `buildPayload` L282-296, 상수 L1-13), 백엔드 `app/services/feature_builder.py`(`estimate_usage`).
 > 결정 전제: F4는 사용자 자율 작업(프론트 `main` 수정·SWA 실배포 승인 불요). 단 본 설계는 **검토·승인 후 구현**.
+>
+> **🔄 후속(2026-06-24, 발견 C):** 본 F4 정합 계약은 이후 **발견 C 해소**로 확장됐다 — 정합 대상 상수에
+> `USAGE_DUTY_CYCLE=0.60`·`MODEL_PREV_MAX_KWH=400`(에어컨 신호를 `prev_year_usage`로 라우팅 + 모델 포화 회피
+> clamp)이 추가되어 양쪽에 미러됨. 본 문서 본문의 산식(아래)은 발견 C **이전** 스냅샷이며, 현행 정합 상수·근거는
+> [`electric_calculator_act_plan.md`](electric_calculator_act_plan.md) 참조. F4의 "폴백=백엔드 추정식" 원칙은 유지.
 
 ---
 

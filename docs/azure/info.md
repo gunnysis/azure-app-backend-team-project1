@@ -203,4 +203,16 @@
 ### 9.3 문서 드리프트
 - 프론트 `API_CONTRACT.md` §4/§5/§8 갱신: 응답은 `baseline_kwh` 제공(계절성), `estimated_bill`/`baseline_bill` 은 **백엔드 미제공**(프론트 계산), 타임아웃 좌표 정합(프론트 8s > 백엔드 6s) 명시.
 
-> pytest 44 passed(기존 39 + 신규 5). `/predict`(서버-서버) 동작 불변. **라이브 검증 잔여**: 실제 Azure 엔드포인트가 2행 입력에 2행을 반환하는지 운영에서 1회 확인 권장(스코어링 규약상 정상이나 실측 미수행) — 만일 1행만 반환해도 `baseline_kwh=None` 폴백으로 안전.
+> pytest 44 passed(기존 39 + 신규 5). `/predict`(서버-서버) 동작 불변. ~~**라이브 검증 잔여**: 실제 Azure 엔드포인트가 2행 입력에 2행을 반환하는지~~ → **✅ 실측 확인(2026-06-24, §10 스윕)**: 2행 입력에 2행 반환·`baseline_kwh` 정상 수신 확정.
+
+---
+
+## 10. 발견 C — 라이브 모델이 에어컨 입력 무시 → 해소(2026-06-24)
+
+§9 어댑터 강건화 직후 라이브 스윕에서 **에어컨 시간을 0→24h 로 바꿔도 `predicted_kwh`가 상수**(그리고 `predicted == baseline` 항상 성립)인 현상 발견. 코드 버그가 아니라 **모델 계약의 의미 문제**였다.
+
+- **근본 원인(AML 데이터 포렌식)**: 백엔드가 에어컨 신호를 실어 보낸 `current_usage`는 **모델의 학습 라벨(예측 타깃)** 이라 입력으로 무시된다. 모델 반응 피처는 **`prev_year_usage`**(단일 지배 예측자, 상관 0.85). 워크스페이스 `team_3_ML`(RG `project-1st-team-3`) 학습 CSV 분석으로 확정. 상세 계약: [`../achieve/design_ml_endpoint.md`](../achieve/design_ml_endpoint.md) §2.1.
+- **해결(Approach A, 코드 변경만·무과금)**: `feature_builder.estimate_usage`가 에어컨 추정치를 **`prev_year_usage` 슬롯으로 라우팅** + 듀티 `AIRCON_DUTY_CYCLE=0.60` + 모델 포화 회피 `MODEL_PREV_MAX_KWH=400` clamp. 프론트 폴백(`script.js`)도 동일 상수로 미러(F4 정합 유지). 백엔드 `15d1e84`·프론트 `2b4b441`.
+- **라이브 검증(/estimate 스윕)**: `predicted` 141→157→184→205→220→259→313→350→363(0~24h **단조 증가**), `baseline` 141 고정 → `predicted>baseline` 전구간. 사용자 보고 "시간 바꿔도 동일요금" 해소 + 프론트 실사용 확인.
+- **재발방지**: ① `feature_builder` 손대면 — 에어컨 신호는 반드시 `prev_year_usage`로(이 §·§2.1 필독). ② `prev>400` 진입 시 모델 포화로 재발 → clamp 유지. ③ 백엔드 무CI → `deploy.sh` 수동배포(커밋≠배포). pytest 48 passed·정합 그리드 220케이스 0 불일치.
+- **장기(미해결)**: 진짜 ML 정상화는 가구별 에어컨+사용량 라벨 데이터 수집 후 재학습 필요(MVP 범위 밖). 설계·비교표: [`../plans/electric_calculator_act_plan.md`](../plans/electric_calculator_act_plan.md).
